@@ -1,8 +1,10 @@
 """La voix de Jarvis (synthèse vocale), toujours en local.
 
   ollama  Phonon de Gradium servi par Ollama (Mac Apple Silicon, Ollama ≥ 0.40.11).
-          Voix française « Augustin », 141 Mo en mémoire, plus de 100× le temps réel.
-  say     La synthèse intégrée à macOS (voix « Thomas »). Zéro installation.
+          Voix féminine « Noémie », 141 Mo en mémoire, plus de 100× le temps réel.
+  piper   Piper (Linux, Mac, Windows), sur le processeur. Voix féminine « Siwis »,
+          63 Mo, téléchargée une seule fois. Naturelle et rapide même sur un vieux PC.
+  say     La synthèse intégrée à macOS. Zéro installation.
   ptts    Phonon via le moteur Rust de Gradium (Linux/Mac, compte Hugging Face requis).
   espeak  espeak-ng (Linux, voix robotique mais universelle).
   aucun   Jarvis répond seulement par écrit.
@@ -19,12 +21,13 @@ import shutil
 import subprocess
 import threading
 import time
+from pathlib import Path
 from typing import Callable, Iterator
 
 import numpy as np
 
 from jarvis.config import IS_APPLE_SILICON, IS_MAC, Config
-from jarvis.llm import Ollama
+from jarvis.llm import Ollama, OllamaErreur
 from jarvis.textutils import pour_la_voix
 from jarvis.voice.audio import HautParleur, carillon
 
@@ -49,13 +52,33 @@ class VoixOllama(Voix):
         self.nom = f"Phonon · {voix}" if voix else "Phonon"
 
     def synthese(self, texte: str) -> Iterator[np.ndarray]:
+        try:
+            flux = self.llm.parler(self.modele, texte, self.voix or None)
+            premier = next(flux, b"")
+        except OllamaErreur as e:
+            if not self.voix or "voice" not in str(e).lower():
+                raise
+            # Voix inconnue de ce modèle : on garde la voix par défaut plutôt que de rester muet.
+            log.warning("Voix « %s » inconnue de %s : voix par défaut utilisée. %s", self.voix, self.modele, e)
+            self.voix, self.nom = "", "Phonon · voix par défaut"
+            flux = self.llm.parler(self.modele, texte, None)
+            premier = next(flux, b"")
+        yield from self._echantillons(premier, flux)
+
+    @staticmethod
+    def _echantillons(premier: bytes, flux: Iterator[bytes]) -> Iterator[np.ndarray]:
         reste = b""
-        for bloc in self.llm.parler(self.modele, texte, self.voix or None):
+        for bloc in _chainer(premier, flux):
             donnees = reste + bloc
             utile = len(donnees) - (len(donnees) % 2)  # un échantillon = 2 octets
             reste = donnees[utile:]
             if utile:
                 yield np.frombuffer(donnees[:utile], dtype="<i2").copy()
+
+
+def _chainer(premier: bytes, flux: Iterator[bytes]) -> Iterator[bytes]:
+    yield premier
+    yield from flux
 
 
 class VoixPtts(Voix):
@@ -72,6 +95,55 @@ class VoixPtts(Voix):
         with self._tts.stream(texte, voice=self.voix) as flux:
             for morceau in flux:
                 yield (np.clip(np.asarray(morceau, dtype=np.float32), -1, 1) * 32767).astype(np.int16)
+
+
+# Voix françaises de Piper (https://huggingface.co/rhasspy/piper-voices), avec leur licence.
+VOIX_PIPER_FR = {
+    "fr_FR-siwis-medium": "féminine, la plus naturelle (CC BY 4.0)",
+    "fr_FR-siwis-low": "féminine, plus légère et plus rapide (CC BY 4.0)",
+    "fr_FR-upmc-medium": "deux voix, féminine (Jessica) et masculine (Pierre), débit rapide",
+    "fr_FR-tom-medium": "masculine, chaleureuse",
+    "fr_FR-gilles-low": "masculine",
+}
+
+
+def preparer_voix_piper(nom: str, dossier: Path) -> Path:
+    """Télécharge une voix Piper (≈ 60 Mo) dans ~/.jarvis/voix si elle n'y est pas encore."""
+    dossier.mkdir(parents=True, exist_ok=True)
+    modele = dossier / f"{nom}.onnx"
+    config = dossier / f"{nom}.onnx.json"
+    if modele.exists() and config.exists() and modele.stat().st_size > 1_000_000:
+        return modele
+    from piper.download_voices import download_voice
+
+    temporaire = dossier / ".telechargement"
+    shutil.rmtree(temporaire, ignore_errors=True)
+    temporaire.mkdir()
+    try:
+        download_voice(nom, temporaire)  # dans un dossier à part : un téléchargement coupé ne laisse rien
+        for fichier in temporaire.iterdir():
+            fichier.replace(dossier / fichier.name)
+    finally:
+        shutil.rmtree(temporaire, ignore_errors=True)
+    if not modele.exists():
+        raise RuntimeError(f"Voix Piper « {nom} » introuvable après téléchargement.")
+    return modele
+
+
+class VoixPiper(Voix):
+    def __init__(self, nom: str, dossier: Path, debit: float = 1.0) -> None:
+        from piper import PiperVoice, SynthesisConfig
+
+        self._voix = PiperVoice.load(str(preparer_voix_piper(nom, dossier)))
+        # length_scale > 1 ralentit la voix : c'est l'inverse du débit.
+        self._reglages = SynthesisConfig(length_scale=1.0 / max(0.5, min(2.0, debit)))
+        self.freq = int(self._voix.config.sample_rate)
+        prenom = nom.split("-")[1].capitalize() if nom.count("-") >= 2 else nom
+        self.nom = f"Piper · {prenom}"
+
+    def synthese(self, texte: str) -> Iterator[np.ndarray]:
+        for morceau in self._voix.synthesize(texte, syn_config=self._reglages):
+            yield morceau.audio_int16_array
 
 
 class VoixCommande(Voix):
@@ -100,42 +172,71 @@ class VoixMuette(Voix):
 
 
 def creer_voix(config: Config, llm: Ollama) -> Voix:
+    """Crée la voix demandée ; en mode « auto », essaie la meilleure disponible puis les suivantes."""
+    moteur = config.voix.moteur
+    if moteur != "auto":
+        return _creer(moteur, config, llm)
+    erreurs = []
+    for candidat in moteurs_possibles(config, llm):
+        try:
+            return _creer(candidat, config, llm)
+        except Exception as e:  # voix absente, téléchargement impossible…
+            log.info("Voix %s indisponible : %s", candidat, e)
+            erreurs.append(f"{candidat} : {e}")
+    if erreurs:
+        log.warning("Aucune voix disponible (%s)", " ; ".join(erreurs))
+    return VoixMuette()
+
+
+def _creer(moteur: str, config: Config, llm: Ollama) -> Voix:
     v = config.voix
-    moteur = v.moteur
-    if moteur == "auto":
-        moteur = _choisir_moteur(config, llm)
     if moteur == "ollama":
         return VoixOllama(llm, v.modele_tts, v.voix)
+    if moteur == "piper":
+        return VoixPiper(v.voix_piper, config.dossier / "voix", v.debit)
     if moteur == "say":
-        return VoixCommande(["say", "-v", v.voix_say, "-r", str(v.vitesse_say)], f"macOS · {v.voix_say}")
+        if not shutil.which("say"):
+            raise RuntimeError("la commande say n'existe que sur macOS")
+        vitesse = str(round(v.vitesse_say * v.debit))
+        return VoixCommande(["say", "-v", v.voix_say, "-r", vitesse], f"macOS · {v.voix_say}")
     if moteur == "ptts":
         return VoixPtts(v.modele_tts, v.voix)
     if moteur == "espeak":
         commande = shutil.which("espeak-ng") or shutil.which("espeak")
         if not commande:
             raise RuntimeError("espeak-ng n'est pas installé (sudo apt install espeak-ng).")
-        return VoixCommande([commande, "-v", "fr+m3", "-s", "165"], "espeak-ng")
-    return VoixMuette()
+        return VoixCommande([commande, "-v", "fr+f3", "-s", str(round(165 * v.debit))], "espeak-ng")
+    if moteur == "aucun":
+        return VoixMuette()
+    raise ValueError(f"Moteur de voix inconnu : {moteur}")
 
 
-def _choisir_moteur(config: Config, llm: Ollama) -> str:
+def moteurs_possibles(config: Config, llm: Ollama) -> list[str]:
+    """Ordre de préférence selon la machine."""
+    ordre: list[str] = []
     if IS_APPLE_SILICON:
         try:
             if "speech" in llm.capacites(config.voix.modele_tts):
-                return "ollama"
+                ordre.append("ollama")
         except Exception:
-            log.info("Phonon indisponible dans Ollama : repli sur la voix de macOS.")
-        return "say"
+            log.info("Phonon indisponible dans Ollama : repli sur Piper.")
+    if _importable("piper"):
+        ordre.append("piper")
     if IS_MAC:
-        return "say"
-    try:
-        import ptts  # noqa: F401
-        return "ptts"
-    except ImportError:
-        pass
+        ordre.append("say")
+    if _importable("ptts"):
+        ordre.append("ptts")
     if shutil.which("espeak-ng") or shutil.which("espeak"):
-        return "espeak"
-    return "aucun"
+        ordre.append("espeak")
+    return ordre
+
+
+def _importable(module: str) -> bool:
+    import importlib.util
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        return False
 
 
 class Orateur:

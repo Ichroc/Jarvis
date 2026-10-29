@@ -154,10 +154,14 @@ def verifier(config: Config) -> list[tuple[str, list[Verif]]]:
         v.append(Verif("ok", "Détection de voix et « Hey Jarvis »", "modèles ONNX embarqués"))
     except Exception as e:
         v.append(Verif("ko", "Modèles d'écoute", str(e)))
+    if _importable("piper"):
+        modele = config.dossier / "voix" / f"{config.voix.voix_piper}.onnx"
+        v.append(Verif("ok", "Voix Piper", config.voix.voix_piper + ("" if modele.exists()
+                       else " · sera téléchargée au premier lancement (≈ 60 Mo)")))
+    elif not IS_APPLE_SILICON:
+        v.append(Verif("attention", "Voix Piper", "absente", "Lance : uv sync (installe piper-tts)"))
     if IS_MAC:
-        v.append(Verif("ok" if shutil.which("say") else "attention", "Voix de secours macOS", "say"))
-    elif not (shutil.which("espeak-ng") or _importable("ptts")):
-        v.append(Verif("attention", "Voix sur Linux", "aucune", "sudo apt install espeak-ng (ou uv sync --extra ptts)"))
+        v.append(Verif("ok" if shutil.which("say") else "attention", "Voix de secours macOS", config.voix.voix_say))
     sections.append(("Voix et écoute", v))
 
     # ------------------------------------------------------------- données

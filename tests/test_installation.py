@@ -67,11 +67,10 @@ def test_detection_du_materiel(tmp_path):
 
 
 def test_paquets_audio(tmp_path):
-    presents = faux_bin(tmp_path / "a", espeak_ng="exit 0",
-                        ldconfig='echo "libportaudio.so.2 (libc6,x86-64) => /usr/lib/libportaudio.so.2"')
-    assert bash("paquets_audio_manquants", tmp_path, path=presents).stdout == ""
-    absents = faux_bin(tmp_path / "b", ldconfig='echo "libc.so.6 (libc6,x86-64) => /lib/libc.so.6"')
-    assert bash("paquets_audio_manquants", tmp_path, path=absents).stdout == "libportaudio2 espeak-ng"
+    present = faux_bin(tmp_path / "a", ldconfig='echo "libportaudio.so.2 (libc6,x86-64) => /usr/lib/libportaudio.so.2"')
+    assert bash("paquets_audio_manquants", tmp_path, path=present).stdout == ""
+    absent = faux_bin(tmp_path / "b", ldconfig='echo "libc.so.6 (libc6,x86-64) => /lib/libc.so.6"')
+    assert bash("paquets_audio_manquants", tmp_path, path=absent).stdout == "libportaudio2"
 
 
 def test_modele_leger(tmp_path):

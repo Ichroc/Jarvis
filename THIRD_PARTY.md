@@ -6,6 +6,8 @@
 | Qwen3.5 9B | cerveau | Apache 2.0 | ollama.com/library/qwen3.5 |
 | Qwen3-Embedding 0.6B | mémoire et documents | Apache 2.0 | ollama.com/library/qwen3-embedding |
 | Phonon 40M français (Gradium) | voix | **CC BY-NC 4.0** (usage non commercial) | huggingface.co/gradium/phonon-40m-fr |
+| Piper (Open Home Foundation) | voix sur processeur (`piper-tts`) | GPL-3.0 | github.com/OHF-Voice/piper1-gpl |
+| Voix Piper « siwis » (fr_FR, féminine) | voix sous Linux | CC BY 4.0 (corpus SIWIS, université d'Édimbourg) | huggingface.co/rhasspy/piper-voices |
 | Whisper large-v3 turbo (OpenAI) | transcription | MIT | huggingface.co/mlx-community/whisper-large-v3-turbo |
 | mlx-whisper (Apple) | exécution de Whisper avec MLX | MIT | github.com/ml-explore/mlx-examples |
 | openWakeWord (David Scripka) | mélspectrogramme et embeddings audio (`melspectrogram.onnx`, `embedding_model.onnx`) | Apache 2.0 | github.com/dscripka/openWakeWord |

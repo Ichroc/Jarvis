@@ -32,16 +32,11 @@ detecter_acceleration() {
   echo "aucune"
 }
 
-# Paquets Linux nécessaires au micro (PortAudio) et à la voix de secours (espeak-ng).
+# Paquet Linux nécessaire au micro et au haut-parleur (PortAudio). La voix (Piper) n'a besoin de rien d'autre.
 paquets_audio_manquants() {
-  local manquants=""
   if ! { ldconfig -p 2>/dev/null || /sbin/ldconfig -p 2>/dev/null || true; } | grep 'libportaudio\.so' >/dev/null; then
-    manquants="libportaudio2"
+    printf '%s' "libportaudio2"
   fi
-  if ! command -v espeak-ng >/dev/null 2>&1; then
-    manquants="${manquants:+$manquants }espeak-ng"
-  fi
-  printf '%s' "$manquants"
 }
 
 # Remplace le modèle par défaut par le modèle léger, sans jamais écraser un choix personnel.
@@ -142,15 +137,15 @@ main() {
   if [ "$OS" = "Linux" ]; then
     local MANQUANTS; MANQUANTS="$(paquets_audio_manquants)"
     if [ -z "$MANQUANTS" ]; then
-      ok "Audio : PortAudio et espeak-ng présents"
+      ok "Audio : PortAudio présent"
     else
-      attention "Paquets audio manquants : $MANQUANTS (micro et voix de Jarvis)"
-      if command -v apt-get >/dev/null 2>&1 && demander_oui "Les installer avec apt ? (ton mot de passe sera demandé)"; then
+      attention "Paquet audio manquant : $MANQUANTS (micro et haut-parleur de Jarvis)"
+      if command -v apt-get >/dev/null 2>&1 && demander_oui "L'installer avec apt ? (ton mot de passe sera demandé)"; then
         # shellcheck disable=SC2086
-        if sudo apt-get install -y $MANQUANTS; then ok "Paquets audio installés"
+        if sudo apt-get install -y $MANQUANTS; then ok "Paquet audio installé"
         else attention "Installation impossible. Plus tard : sudo apt update && sudo apt install $MANQUANTS"; fi
       else
-        info "Tu pourras les installer plus tard : sudo apt install $MANQUANTS"
+        info "Tu pourras l'installer plus tard : sudo apt install $MANQUANTS"
       fi
     fi
   fi
@@ -248,6 +243,23 @@ print(t.nom)")"; then
     ok "Transcription prête : $NOM_STT"
   else
     attention "Transcription non préchargée : elle se fera au premier lancement."
+  fi
+
+  etape "Voix (téléchargée une seule fois)"
+  local NOM_VOIX=""
+  if NOM_VOIX="$(uv run python -c "
+import sys
+from jarvis.config import Config
+from jarvis.llm import Ollama
+from jarvis.voice.tts import creer_voix
+c = Config.charger()
+v = creer_voix(c, Ollama(c.cerveau.hote_ollama))
+if v.nom == 'aucune':
+    sys.exit('  aucune voix disponible')
+print(v.nom)")"; then
+    ok "Voix prête : $NOM_VOIX · « jarvis voix » pour en essayer d'autres"
+  else
+    attention "Voix non préparée : Jarvis répondra par écrit (« jarvis doctor » donne la raison)."
   fi
 
   # ------------------------------------------------------------------ commande « jarvis »

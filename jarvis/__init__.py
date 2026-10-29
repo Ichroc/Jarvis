@@ -5,4 +5,4 @@ Le cerveau (Qwen3.5), les oreilles (Whisper) et la voix (Phonon) tournent
 sur la machine : aucune conversation ne quitte l'ordinateur.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"

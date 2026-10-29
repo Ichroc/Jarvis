@@ -10,7 +10,7 @@ Ce guide suit une phrase, du micro jusqu'au haut-parleur, et explique chaque bri
  +≈ 800 ms Whisper a transcrit le texte                 voice/stt.py
  +≈ 400 ms le modèle choisit un outil ou écrit           brain.py
  +≈ 300 ms la première phrase est complète              textutils.py
- +≈ 150 ms premier son de la voix d'Augustin            voice/tts.py
+ +≈ 150 ms premier son de la voix de Noémie              voice/tts.py
 ```
 
 ---

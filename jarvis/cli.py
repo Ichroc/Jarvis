@@ -266,25 +266,49 @@ def cmd_memoire(args) -> int:
 
 
 def cmd_voix(args) -> int:
+    """Liste les voix disponibles sur cette machine et en fait essayer une."""
     cfg = _config()
     from jarvis.llm import Ollama, OllamaErreur
+    from jarvis.voice.tts import VOIX_PIPER_FR, Orateur, VoixOllama, VoixPiper, moteurs_possibles
 
     llm = Ollama(cfg.cerveau.hote_ollama)
-    try:
-        noms = llm.voix(cfg.voix.modele_tts)
-    except OllamaErreur as e:
-        print(rouge(f"  {e}"))
-        return 1
-    print(gris(f"\n  Voix de {cfg.voix.modele_tts} (actuelle : {cfg.voix.voix})\n"))
-    for n in noms:
-        print("  " + (arc("● ") if n == cfg.voix.voix else "  ") + n)
+    moteurs = moteurs_possibles(cfg, llm)
+    print(gris(f"\n  Moteurs de voix disponibles ici : {', '.join(moteurs) or 'aucun'}\n"))
+    if "ollama" in moteurs:
+        try:
+            print("  " + blanc(f"Phonon ({cfg.voix.modele_tts})") + gris(f" · actuelle : {cfg.voix.voix}"))
+            for n in llm.voix(cfg.voix.modele_tts):
+                print("    " + (arc("● ") if n == cfg.voix.voix else "  ") + n)
+            print()
+        except OllamaErreur as e:
+            print(rouge(f"  {e}"))
+    if "piper" in moteurs:
+        print("  " + blanc("Piper") + gris(f" · actuelle : {cfg.voix.voix_piper}"))
+        for n, description in VOIX_PIPER_FR.items():
+            print("    " + (arc("● ") if n == cfg.voix.voix_piper else "  ") + n.ljust(22) + gris(description))
+        print()
     if args.essayer:
-        from jarvis.voice.tts import Orateur, VoixOllama
-        orateur = Orateur(VoixOllama(llm, cfg.voix.modele_tts, args.essayer))
-        orateur.dire(f"Bonjour, je suis {args.essayer}. Voici comment Jarvis parlerait avec ma voix.")
+        nom = args.essayer
+        try:
+            if nom.startswith("fr_") or "ollama" not in moteurs:
+                voix = VoixPiper(nom, cfg.dossier / "voix", cfg.voix.debit)
+                reglage = f'[voix] voix_piper = "{nom}"'
+            else:
+                voix = VoixOllama(llm, cfg.voix.modele_tts, nom)
+                reglage = f'[voix] voix = "{nom}"'
+        except Exception as e:
+            print(rouge(f"  Voix « {nom} » impossible à charger : {e}"))
+            return 1
+        print(gris(f"  Écoute : {voix.nom}…"))
+        orateur = Orateur(voix)
+        orateur.dire("Bonjour, je suis Jarvis. Voici ma voix. Il fait quatorze degrés à Angers, "
+                     "et votre prochain rappel est à dix-huit heures.")
         time.sleep(0.2)
         orateur.attendre()
-    print(gris("\n  Essayer une voix : jarvis voix --essayer Lucien · la choisir : [voix] voix = \"…\" dans config.toml\n"))
+        print(gris(f"  Pour la garder, mets dans ~/.jarvis/config.toml : {reglage}\n"))
+    else:
+        exemple = "fr_FR-tom-medium" if "piper" in moteurs else "Coralie"
+        print(gris(f"  Essayer une voix : jarvis voix --essayer {exemple}\n"))
     return 0
 
 

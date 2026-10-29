@@ -19,10 +19,15 @@ prechauffage = true          # au lancement, prépare le modèle : la 1re répon
 
 [voix]
 active = true
-moteur = "auto"              # auto | ollama | say | ptts | espeak | aucun
-modele_tts = "phonon:fr"     # voix Phonon française (Ollama ≥ 0.40.11, Mac Apple Silicon)
-voix = "Augustin"            # voix masculines : Augustin, Arnaud, Jules, Baptiste, Lucien, Marius
-voix_say = "Thomas"          # repli : voix macOS (télécharge « Thomas (Améliorée) » pour mieux)
+moteur = "auto"              # auto | ollama | piper | say | ptts | espeak | aucun
+debit = 1.0                  # vitesse de parole : 0,8 plus lent, 1,2 plus rapide
+# Mac Apple Silicon : voix Phonon, servie par Ollama (≥ 0.40.11)
+modele_tts = "phonon:fr"
+voix = "Noémie"              # féminines : Noémie, Coralie, Tiphaine, Maëlys, Orianne, Solène, Ninon, Lilou, Hélène
+                             # masculines : Augustin, Arnaud, Jules, Baptiste, Lucien, Marius
+# Linux (et repli sur Mac) : voix Piper, sur le processeur
+voix_piper = "fr_FR-siwis-medium"  # féminine ; « jarvis voix » liste les autres
+voix_say = "Amélie"          # dernier recours sur Mac : voix intégrée à macOS
 lire_reponses_ecrites = false  # true : Jarvis lit aussi à voix haute les réponses aux questions tapées
 
 [oreilles]

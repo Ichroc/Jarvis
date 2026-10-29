@@ -5,7 +5,7 @@ def test_valeurs_par_defaut():
     cfg = Config()
     assert cfg.cerveau.modele == "qwen3.5:9b"
     assert cfg.voix.modele_tts == "phonon:fr"
-    assert cfg.voix.voix == "Augustin"
+    assert cfg.voix.voix == "Noémie" and cfg.voix.voix_piper == "fr_FR-siwis-medium"
     assert cfg.interface.port == 7777
 
 

@@ -55,8 +55,10 @@ class Voix:
     active: bool = True
     moteur: str = "auto"
     modele_tts: str = "phonon:fr"
-    voix: str = "Augustin"
-    voix_say: str = "Thomas"
+    voix: str = "Noémie"
+    voix_piper: str = "fr_FR-siwis-medium"
+    debit: float = 1.0
+    voix_say: str = "Amélie"
     vitesse_say: int = 185
     lire_reponses_ecrites: bool = False
 

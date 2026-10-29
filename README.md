@@ -9,7 +9,7 @@
   ◉ écoute          Silero VAD repère la fin de ta phrase
   ◌ transcription   Whisper large-v3 turbo, sur le GPU du Mac (MLX)
   ◎ réflexion       Qwen3.5 9B choisit l'outil météo, le pare-feu l'autorise
-  ♪ parole          Phonon (voix « Augustin ») commence à parler dès la première phrase
+  ♪ parole          Phonon (voix « Noémie ») commence à parler dès la première phrase
 « Cet après-midi à Angers, comptez 14 à 16 °C. Une averse est probable vers 18 h :
   un parapluie serait prudent, Monsieur. »
 ```
@@ -26,7 +26,7 @@
 |---|---|---|
 | Machine | Lenovo ThinkPad T460 · Intel Core 6ᵉ gén., 2 cœurs, 16 Go DDR3L, sans GPU utile | MacBook Air M5 · 10 cœurs, GPU avec accélérateurs IA, 16 Go unifiés à 153 Go/s |
 | Cerveau | `qwen3.5:4b` · ≈ 2 à 4 jetons/s | `qwen3.5:9b` · ≈ 20 à 25 jetons/s |
-| Voix et oreilles | espeak-ng · Whisper small (processeur) | Phonon « Augustin » · Whisper turbo (GPU) |
+| Voix et oreilles | Piper « Siwis » (féminine) · Whisper small (processeur) | Phonon « Noémie » (féminine) · Whisper turbo (GPU) |
 | Réponse vocale | 15 s à 1 min | ≈ 2 à 3 s |
 
 L'installateur détecte la machine et choisit seul. Fiches techniques, calculs et explications : **[docs/MACHINES.md](docs/MACHINES.md)**.
@@ -63,7 +63,7 @@ flowchart LR
     C <--> F{"Pare-feu<br/>éthique"}
     F <--> X["26 outils"]
     C <--> S[("Mémoire<br/>SQLite + vecteurs")]
-    C --> P["Voix<br/>Phonon · Augustin"] --> H((Haut-parleur))
+    C --> P["Voix<br/>Phonon · Noémie"] --> H((Haut-parleur))
 ```
 
 | Brique | Modèle | Disque | Mémoire vive |
@@ -117,7 +117,7 @@ uv run jarvis
 
 ### Tester dès maintenant sur ton Linux
 
-Le même `bash install.sh` fonctionne sous Linux, en mode réduit. Il propose d'installer les paquets audio manquants (`libportaudio2` pour le micro, `espeak-ng` pour la voix) : la transcription passe par le processeur (faster-whisper) et la voix par espeak-ng, car Ollama ne sert la voix Phonon que sur Mac pour l'instant.
+Le même `bash install.sh` fonctionne sous Linux, en mode réduit. Il propose d'installer le paquet `libportaudio2` (micro et haut-parleur). La transcription passe par le processeur (faster-whisper) et la voix par **Piper** : une voix féminine naturelle (« Siwis », 63 Mo, téléchargée une seule fois), assez légère pour un vieux processeur, car Ollama ne sert les voix Phonon que sur Mac pour l'instant.
 
 Sur un portable sans carte graphique (un ThinkPad, par exemple), tout repose sur le processeur. L'installateur le détecte et propose le modèle léger **qwen3.5:4b**, deux fois plus rapide que le 9B. Compte tout de même quelques minutes de préchauffage au lancement, puis de l'ordre de 15 secondes à une minute par réponse (estimation) : assez pour tout tester, la fluidité viendra avec le Mac.
 
@@ -159,7 +159,7 @@ Pour changer : `ollama pull qwen3.5:4b`, puis `modele = "qwen3.5:4b"` dans la se
 
 **Petites astuces**
 
-- Six voix masculines françaises : Augustin, Arnaud, Jules, Baptiste, Lucien, Marius. Écoute-les avec `jarvis voix --essayer <nom>`.
+- Voix : `jarvis voix` liste celles de ta machine, `jarvis voix --essayer <nom>` les fait entendre. Sur Mac, neuf voix féminines Phonon (Noémie, Coralie, Solène…) et six masculines (Augustin, Lucien…) ; sous Linux, les voix Piper (`fr_FR-siwis-medium` féminine, `fr_FR-tom-medium` masculine…). Le réglage `debit` accélère ou ralentit la parole.
 - Whisper écrit mal un nom propre ? Ajoute-le à `vocabulaire` dans `[oreilles]`.
 - Jarvis se déclenche tout seul ? Monte `seuil_activation` à 0,6 ou 0,7.
 - Le **mode confidentiel** (bouton du HUD) coupe tous les outils internet : pratique en réunion ou en entretien.
@@ -214,7 +214,7 @@ jarvis/
 | `zsh: command not found: jarvis` | La commande est créée par l'installation : lance `bash install.sh` depuis le dossier qui contient `install.sh`, puis ouvre un nouveau terminal. Si tu as refusé l'ajout au PATH : `~/.local/bin/jarvis`. |
 | Réponses très lentes sur un PC sans carte graphique | Passe au modèle léger : `ollama pull qwen3.5:4b`, puis `modele = "qwen3.5:4b"` dans `~/.jarvis/config.toml`. Encore plus rapide, mais moins fiable : `qwen3.5:2b`. |
 | « Hey Jarvis » ne réagit pas | `jarvis doctor` vérifie le signal du micro ; autorise ton terminal dans Réglages Système > Confidentialité et sécurité > Micro. |
-| La voix est celle de macOS, pas Augustin | Ollama doit être en 0.40.11 ou plus, puis `ollama pull phonon:fr`. |
+| La voix est celle de macOS, pas Noémie | Ollama doit être en 0.40.11 ou plus, puis `ollama pull phonon:fr`. |
 | Réponses lentes | Demande « Comment va mon Mac ? » : si la mémoire d'échange grimpe, passe au profil Éco. |
 | « Le port 7777 est déjà utilisé » | Jarvis tourne déjà, ou lance `jarvis --port 7778`. |
 | Jarvis ne voit pas ton écran | Autorise ton terminal dans Réglages Système > Enregistrement de l'écran. |

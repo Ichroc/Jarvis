@@ -8,7 +8,7 @@ Jarvis tourne avec **le même code** sur un vieux ThinkPad sous Linux et sur un 
 | Système | Linux (Ubuntu) | macOS |
 | Rôle | Tester Jarvis, développer, apprendre | Utiliser Jarvis au quotidien, à la voix |
 | Cerveau | `qwen3.5:4b` (3,3 Go) | `qwen3.5:9b` (6,6 Go) |
-| Voix | espeak-ng (robotique) | Phonon « Augustin » (naturelle) |
+| Voix | Piper « Siwis », féminine, naturelle | Phonon « Noémie », féminine, très naturelle |
 | Oreilles | Whisper small, sur le processeur | Whisper large-v3 turbo, sur le GPU (MLX) |
 
 ---
@@ -71,10 +71,10 @@ Sur le Mac, la mémoire unifiée sert à la fois au processeur et au GPU : le mo
 | Cerveau | `qwen3.5:4b` | `qwen3.5:9b` | bande passante mémoire (voir plus haut) |
 | Mémoire et documents | `qwen3-embedding:0.6b` | `qwen3-embedding:0.6b` | petit modèle, rapide partout |
 | Transcription | faster-whisper `small`, int8, processeur | mlx-whisper `large-v3-turbo`, GPU | MLX n'existe que sur puce Apple |
-| Voix | espeak-ng | Phonon 40M « Augustin » via Ollama | Ollama ne sert les voix Phonon que sur Mac Apple Silicon |
+| Voix | Piper `fr_FR-siwis-medium` (63 Mo, processeur) | Phonon 40M « Noémie » via Ollama | Ollama ne sert les voix Phonon que sur Mac Apple Silicon ; Piper tourne vite même sur 2 cœurs |
 | « Hey Jarvis » | openWakeWord (ONNX) | openWakeWord (ONNX) | ≈ 1 ms par bloc de son : tourne partout |
 | Détection de fin de phrase | Silero VAD (ONNX) | Silero VAD (ONNX) | idem |
-| Paquets système | `libportaudio2`, `espeak-ng` (proposés par l'installateur) | rien à ajouter | le micro passe par PortAudio sous Linux |
+| Paquets système | `libportaudio2` (proposé par l'installateur) | rien à ajouter | le micro passe par PortAudio sous Linux |
 
 Le choix se fait dans `install.sh` (fonction `detecter_acceleration`) : sans puce Apple ni carte graphique NVIDIA ou AMD, il propose le modèle léger, puis l'écrit dans `~/.jarvis/config.toml`. Rien n'est figé : tout se change dans ce fichier.
 
@@ -97,7 +97,7 @@ Estimations, à remplacer par tes vraies mesures avec `jarvis bench`.
 |---|---|---|
 | Conversation écrite (`jarvis chat`) | ✓ | ✓ |
 | HUD et « Hey Jarvis » | ✓ | ✓ |
-| Voix naturelle | voix robotique (espeak-ng) | ✓ Phonon |
+| Voix naturelle | ✓ Piper (bonne) | ✓ Phonon (excellente) |
 | Outils (rappels, notes, météo, terminal…) | ✓ | ✓ |
 | Recherche dans tes documents | ✓ (indexation plus lente) | ✓ |
 | Regarder l'écran (vision) | ✓ mais très lent | ✓ |
