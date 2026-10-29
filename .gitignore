@@ -1,0 +1,17 @@
+# Environnement Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Tes données personnelles vivent dans ~/.jarvis, jamais ici.
+# Par sécurité, on ignore quand même tout fichier de données qui traînerait.
+*.db
+*.jsonl
+config.toml

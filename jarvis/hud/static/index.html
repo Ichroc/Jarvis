@@ -1,0 +1,1258 @@
+<title>Jarvis HUD</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="jarvis-mode" content="demo">
+<style>
+/* Concept : cockpit en triptyque (télémétrie · réacteur · journal de bord) et barre de commande.
+   Un seul monde visuel, assumé : la nuit de l'atelier, la lumière cyan du réacteur, l'or Stark.
+   Typographie unique : Times New Roman, travaillée en capitales espacées pour les instruments. */
+:root {
+  color-scheme: dark;
+  --nuit: #03070d;
+  --coque: #07111d;
+  --coque-haute: #0b1828;
+  --filet: #14304a;
+  --filet-vif: #24557a;
+  --arc: #74dcff;
+  --eclat: #f3fbff;
+  --or: #e6bf6e;
+  --alerte: #ff5d50;
+  --vert: #7fe0a6;
+  --texte: #dde8f3;
+  --sourdine: #8198ae;
+  --pale: #4b6378;
+  --serif: "Times New Roman", Times, "Liberation Serif", "Nimbus Roman", Tinos, serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --t-label: 11px;
+  --t-petit: 13px;
+  --t-corps: 17px;
+  --t-titre: 22px;
+  --t-horloge: 44px;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+  height: 100%;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { height: 100%; }
+body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 45%, var(--coque) 0%, var(--nuit) 62%) fixed, var(--nuit);
+  color: var(--texte);
+  font: var(--t-corps)/1.45 var(--serif);
+  -webkit-font-smoothing: antialiased;
+}
+[hidden] { display: none !important; }
+button, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+:focus-visible { outline: 2px solid var(--arc); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--arc) 32%, transparent); }
+.cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.etiquette {
+  margin: 0; font-size: var(--t-label); font-weight: normal; letter-spacing: .3em;
+  text-transform: uppercase; color: var(--sourdine);
+}
+.chiffres { font-variant-numeric: lining-nums tabular-nums; }
+
+/* ------------------------------------------------------------------ grille */
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(250px, 290px) minmax(0, 1fr) minmax(320px, 420px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "tete tete tete" "tele scene journal" "tele commande journal";
+  gap: 14px 18px;
+  padding-block: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--arc) 3.5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--arc) 3.5%, transparent) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: center;
+}
+
+/* ------------------------------------------------------------------ en-tête */
+.tete {
+  grid-area: tete; display: flex; align-items: center; gap: 12px 22px; flex-wrap: wrap;
+  padding-bottom: 12px; border-bottom: 1px solid var(--filet);
+}
+.marque { display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0; }
+.sigle { font-size: 21px; letter-spacing: .48em; color: var(--eclat); white-space: nowrap; }
+.devise { font-size: var(--t-petit); font-style: italic; color: var(--sourdine); letter-spacing: .04em; }
+.puces { display: flex; gap: 8px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; }
+.puce, .bascule {
+  display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px;
+  border: 1px solid var(--filet); font-size: var(--t-label); letter-spacing: .2em; text-transform: uppercase;
+  color: var(--sourdine); white-space: nowrap;
+}
+.puce i, .bascule i { width: 6px; height: 6px; border-radius: 50%; background: var(--pale); flex: none; }
+.puce.local i { background: var(--vert); box-shadow: 0 0 8px var(--vert); }
+.puce.demo { border-color: var(--or); color: var(--or); }
+.demo .court { display: none; }
+.interrupteurs { display: flex; gap: 8px; }
+.bascule:hover { border-color: var(--filet-vif); color: var(--texte); }
+.bascule[aria-pressed="true"] { border-color: var(--arc); color: var(--arc); }
+.bascule[aria-pressed="true"] i { background: var(--arc); box-shadow: 0 0 8px var(--arc); }
+#btn-confidentiel[aria-pressed="true"] { border-color: var(--or); color: var(--or); }
+#btn-confidentiel[aria-pressed="true"] i { background: var(--or); box-shadow: 0 0 8px var(--or); }
+.horloge { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; }
+#heure { font-size: var(--t-horloge); color: var(--eclat); font-variant-numeric: lining-nums tabular-nums; letter-spacing: .02em; }
+#date { margin-top: 5px; font-size: var(--t-label); letter-spacing: .26em; text-transform: uppercase; color: var(--sourdine); }
+
+/* ------------------------------------------------------------------ panneaux */
+.panneau {
+  position: relative; min-width: 0; min-height: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--arc) 4%, transparent), transparent 120px), var(--coque);
+  border: 1px solid var(--filet);
+}
+.panneau::before, .panneau::after {
+  content: ""; position: absolute; width: 14px; height: 14px; pointer-events: none;
+  border-color: var(--arc); border-style: solid; opacity: .7;
+}
+.panneau::before { top: -1px; left: -1px; border-width: 1px 0 0 1px; }
+.panneau::after { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; }
+
+.telemetrie { grid-area: tele; padding: 18px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--filet-vif) transparent; }
+.jauges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.jauge { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.jauge svg { width: 100%; max-width: 70px; height: auto; transform: rotate(-90deg); }
+.jauge circle { fill: none; stroke-width: 3; }
+.jauge .piste { stroke: var(--filet); }
+.jauge .valeur { stroke: var(--arc); stroke-linecap: round; transition: stroke-dashoffset .8s ease, stroke .4s; filter: drop-shadow(0 0 3px var(--arc)); }
+.jauge.haute .valeur { stroke: var(--or); filter: drop-shadow(0 0 3px var(--or)); }
+.jauge figcaption { display: flex; flex-direction: column; gap: 2px; }
+.jauge b { font-weight: normal; font-size: 16px; color: var(--eclat); font-variant-numeric: lining-nums tabular-nums; }
+.jauge span { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--sourdine); }
+.bloc { display: flex; flex-direction: column; gap: 7px; padding-top: 14px; border-top: 1px solid var(--filet); }
+.gros { margin: 0; font-size: 19px; color: var(--eclat); overflow-wrap: anywhere; }
+.gros small { font-size: var(--t-petit); color: var(--sourdine); }
+.detail { margin: 0; font-size: var(--t-petit); color: var(--sourdine); font-style: italic; overflow-wrap: anywhere; }
+.barre { height: 3px; background: var(--filet); overflow: hidden; }
+.barre span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--arc), var(--or)); transition: width .8s ease; }
+.mesures { margin: 0; display: grid; gap: 6px; }
+.mesures div { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; }
+.mesures dt { color: var(--sourdine); }
+.mesures dd { margin: 0; color: var(--eclat); font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
+.systemes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.systemes li { display: grid; grid-template-columns: 8px auto 1fr; align-items: baseline; gap: 9px; font-size: 15px; }
+.systemes i { width: 7px; height: 7px; border-radius: 50%; background: var(--pale); align-self: center; }
+.systemes .ok i { background: var(--vert); box-shadow: 0 0 6px var(--vert); }
+.systemes .ko i { background: var(--alerte); box-shadow: 0 0 6px var(--alerte); }
+.systemes .attente i { background: var(--or); animation: battement 1.2s infinite; }
+.systemes .off { color: var(--sourdine); }
+.sys-val { text-align: right; color: var(--sourdine); font-style: italic; font-size: var(--t-petit); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* ------------------------------------------------------------------ scène */
+.scene { grid-area: scene; position: relative; min-height: 0; min-width: 0; display: grid; }
+#reacteur { position: absolute; inset: 0; width: 100%; height: 100%; }
+.legende {
+  position: absolute; left: 0; right: 0; bottom: 4px; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; text-align: center; padding: 0 12px; pointer-events: none;
+}
+.etat-nom { font-size: var(--t-petit); letter-spacing: .55em; text-transform: uppercase; color: var(--arc); padding-left: .55em; }
+.scene[data-etat="parole"] .etat-nom, .scene[data-etat="reflexion"] .etat-nom { color: var(--or); }
+.scene[data-etat="confirmation"] .etat-nom { color: var(--alerte); }
+.etat-aide { font-size: 15px; font-style: italic; color: var(--sourdine); }
+.sous-titre { margin: 0; max-width: 38ch; min-height: 1.45em; font-size: 20px; font-style: italic; color: var(--eclat); text-wrap: balance; }
+
+/* ------------------------------------------------------------------ journal */
+.journal { grid-area: journal; display: flex; flex-direction: column; }
+.journal-tete { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px 12px; border-bottom: 1px solid var(--filet); }
+.lien { font-size: var(--t-label); letter-spacing: .2em; text-transform: uppercase; color: var(--sourdine); }
+.lien:hover { color: var(--arc); }
+.fil {
+  list-style: none; margin: 0; padding: 14px 18px 18px; flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 16px; scrollbar-width: thin; scrollbar-color: var(--filet-vif) transparent;
+}
+.fil:empty { display: none; }
+.entree { display: flex; flex-direction: column; gap: 6px; padding-left: 12px; border-left: 2px solid var(--pale); min-width: 0; }
+.entree.jarvis { border-left-color: var(--arc); }
+.entree.rappel { border-left-color: var(--or); }
+.entree.erreur { border-left-color: var(--alerte); }
+.qui { margin: 0; font-size: var(--t-label); letter-spacing: .3em; text-transform: uppercase; color: var(--sourdine); }
+.jarvis .qui { color: var(--arc); }
+.qui span { letter-spacing: .1em; text-transform: none; font-style: italic; margin-left: 6px; color: var(--pale); }
+.texte { margin: 0; overflow-wrap: anywhere; }
+.vous .texte { font-style: italic; }
+.texte p { margin: 0 0 .5em; }
+.texte p:last-child { margin-bottom: 0; }
+.texte ul, .texte ol { margin: .2em 0 .5em; padding-left: 1.3em; }
+.texte .titre { color: var(--eclat); letter-spacing: .04em; }
+.texte strong { color: var(--eclat); font-weight: bold; }
+.texte a { color: var(--arc); }
+.texte code { font-family: var(--mono); font-size: .82em; padding: 1px 5px; background: var(--coque-haute); border: 1px solid var(--filet); }
+.texte pre.code { margin: .4em 0; padding: 10px 12px; overflow-x: auto; background: var(--nuit); border: 1px solid var(--filet); }
+.texte pre.code code { padding: 0; border: 0; background: none; font-size: 13px; }
+.curseur { display: inline-block; width: .5em; height: 1em; margin-left: 2px; vertical-align: -2px; background: var(--or); animation: battement .9s steps(2) infinite; }
+.pied { margin: 0; font-size: 12px; letter-spacing: .12em; color: var(--pale); font-variant-numeric: lining-nums tabular-nums; }
+.pied:empty, .outils:empty { display: none; }
+.interrompue .texte { color: var(--sourdine); }
+.outils { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.outil { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; padding: 7px 9px; background: color-mix(in srgb, var(--coque-haute) 70%, transparent); border: 1px solid var(--filet); }
+.outil-icone { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--filet-vif); color: var(--arc); font-size: 15px; }
+.outil[data-risque="sensible"] .outil-icone { border-color: var(--or); color: var(--or); }
+.outil-corps { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.outil-tete { margin: 0; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.outil-nom { font-size: var(--t-label); letter-spacing: .24em; text-transform: uppercase; color: var(--texte); }
+.outil.reseau .outil-nom::after { content: " ↗ internet"; letter-spacing: .1em; color: var(--or); text-transform: none; font-style: italic; }
+.outil-statut { font-size: 12px; font-style: italic; color: var(--sourdine); white-space: nowrap; font-variant-numeric: lining-nums tabular-nums; }
+.outil[data-phase="appel"] .outil-statut { color: var(--arc); animation: battement 1.2s infinite; }
+.outil[data-phase="resultat"] .outil-statut { color: var(--vert); }
+.outil[data-phase="refuse"] .outil-statut, .outil[data-phase="bloque"] .outil-statut, .outil[data-phase="erreur"] .outil-statut { color: var(--alerte); }
+.outil-args { margin: 0; font-size: 14px; font-style: italic; color: var(--sourdine); overflow-wrap: anywhere; }
+.outil-args:empty { display: none; }
+.outil-resultat summary { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--pale); cursor: pointer; }
+.outil-resultat pre { margin: 6px 0 2px; max-height: 160px; overflow: auto; white-space: pre-wrap; font-family: var(--mono); font-size: 12px; color: var(--sourdine); }
+.vide { padding: 4px 18px 18px; display: flex; flex-direction: column; gap: 10px; }
+.vide p { margin: 0; color: var(--sourdine); font-style: italic; }
+.suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+.suggestion { padding: 6px 12px; border: 1px solid var(--filet); font-size: 15px; font-style: italic; color: var(--texte); text-align: left; }
+.suggestion:hover { border-color: var(--arc); color: var(--arc); }
+
+/* ------------------------------------------------------------------ commande */
+.commande { grid-area: commande; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px 12px; align-items: center; padding: 10px; background: var(--coque); border: 1px solid var(--filet-vif); }
+.micro { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--arc); color: var(--arc); transition: background .2s, box-shadow .2s; }
+.micro:hover, .micro[data-actif="1"] { background: color-mix(in srgb, var(--arc) 14%, transparent); box-shadow: 0 0 18px color-mix(in srgb, var(--arc) 45%, transparent); }
+.micro svg { width: 20px; height: 20px; }
+#saisie { width: 100%; min-height: 26px; max-height: 140px; resize: none; border: 0; outline: none; background: transparent; color: var(--eclat); font-size: 18px; line-height: 1.4; padding: 4px 2px; }
+#saisie::placeholder { color: var(--pale); font-style: italic; }
+.envoyer { padding: 10px 18px; border: 1px solid var(--or); color: var(--or); font-size: var(--t-label); letter-spacing: .28em; text-transform: uppercase; }
+.envoyer:hover { background: color-mix(in srgb, var(--or) 12%, transparent); }
+.raccourcis { grid-column: 1 / -1; margin: 0; font-size: 12px; font-style: italic; color: var(--pale); }
+
+/* ------------------------------------------------------------------ démarrage */
+.demarrage { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: var(--nuit); padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); transition: opacity .7s ease; cursor: pointer; }
+.demarrage.sortie { opacity: 0; pointer-events: none; }
+.demarrage-cadre { width: min(560px, 100%); display: flex; flex-direction: column; gap: 22px; }
+.demarrage-sigle { margin: 0; font-size: clamp(24px, 6vw, 38px); letter-spacing: .55em; color: var(--eclat); text-align: center; text-shadow: 0 0 24px color-mix(in srgb, var(--arc) 60%, transparent); }
+.demarrage-sous { margin: -12px 0 0; text-align: center; font-style: italic; color: var(--sourdine); }
+.demarrage-lignes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.demarrage-lignes li { display: grid; grid-template-columns: auto minmax(12px, 1fr) auto auto; gap: 10px; align-items: baseline; font-size: 16px; animation: apparition .35s ease both; min-width: 0; }
+.demarrage-lignes .points { border-bottom: 1px dotted var(--pale); transform: translateY(-4px); }
+.demarrage-lignes .val { color: var(--sourdine); font-style: italic; max-width: 26ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.demarrage-lignes .ok { color: var(--vert); }
+.demarrage-lignes .ko { color: var(--alerte); }
+.demarrage-lignes .off { color: var(--pale); }
+
+/* ------------------------------------------------------------------ autorisation */
+.voile-modale { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 20px max(16px, env(safe-area-inset-right, 0px)) 20px max(16px, env(safe-area-inset-left, 0px)); background: color-mix(in srgb, var(--nuit) 74%, transparent); backdrop-filter: blur(6px); }
+.modale { width: min(540px, 100%); padding: 24px; background: var(--coque); border: 1px solid var(--alerte); box-shadow: 0 0 70px color-mix(in srgb, var(--alerte) 18%, transparent); display: flex; flex-direction: column; gap: 14px; animation: apparition .25s ease both; }
+.modale .etiquette { color: var(--alerte); }
+.modale h2 { margin: 0; font-size: var(--t-titre); font-weight: normal; color: var(--eclat); text-wrap: balance; }
+#modale-icone { color: var(--or); margin-right: 6px; }
+.modale-args { margin: 0; padding: 12px 14px; max-height: 220px; overflow: auto; background: var(--nuit); border: 1px solid var(--filet); font-family: var(--mono); font-size: 14px; color: var(--eclat); white-space: pre-wrap; word-break: break-word; }
+.modale-raison { margin: 0; font-style: italic; color: var(--sourdine); }
+.compte { height: 2px; background: var(--filet); overflow: hidden; }
+.compte span { display: block; height: 100%; background: var(--alerte); transform-origin: left; transition: transform .25s linear; }
+.modale-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.modale-actions button { padding: 10px 20px; font-size: var(--t-label); letter-spacing: .26em; text-transform: uppercase; border: 1px solid var(--pale); color: var(--texte); }
+.modale-actions .autoriser { border-color: var(--or); color: var(--or); }
+.modale-actions .autoriser:hover { background: color-mix(in srgb, var(--or) 12%, transparent); }
+.modale-actions .refuser:hover { border-color: var(--texte); }
+.modale .detail { text-align: right; }
+
+/* ------------------------------------------------------------------ notifications */
+.toasts { position: fixed; z-index: 50; top: calc(100px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+.toast { padding: 12px 14px; background: var(--coque-haute); border: 1px solid var(--filet); border-left: 2px solid var(--arc); display: flex; flex-direction: column; gap: 4px; animation: glisse .35s ease both; box-shadow: 0 10px 40px color-mix(in srgb, var(--nuit) 80%, transparent); }
+.toast p { margin: 0; font-size: 15px; }
+.toast.rappel { border-left-color: var(--or); }
+.toast.rappel .etiquette { color: var(--or); }
+.toast.souvenir .etiquette { color: var(--arc); }
+.toast.alerte { border-left-color: var(--alerte); }
+.toast.alerte .etiquette { color: var(--alerte); }
+.toast.sortie { opacity: 0; transform: translateX(20px); transition: all .4s ease; }
+.bandeau { position: fixed; z-index: 45; left: 50%; transform: translateX(-50%); top: calc(10px + env(safe-area-inset-top, 0px)); margin: 0; padding: 8px 16px; max-width: calc(100vw - 32px); background: var(--coque-haute); border: 1px solid var(--alerte); color: var(--texte); font-size: 15px; font-style: italic; }
+
+@keyframes battement { 50% { opacity: .25; } }
+@keyframes apparition { from { opacity: 0; transform: translateY(6px); } }
+@keyframes glisse { from { opacity: 0; transform: translateX(24px); } }
+
+/* ------------------------------------------------------------------ écrans moyens */
+@media (max-width: 1100px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "tete tete" "tele tele" "scene journal" "commande journal";
+  }
+  :root { --t-horloge: 34px; }
+  .devise, #puce-modele, .demo .long { display: none; }
+  .demo .court { display: inline; }
+  .tete { gap: 10px 16px; }
+  .telemetrie { flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 12px 14px; gap: 14px; }
+  .telemetrie > * { flex: 0 0 auto; }
+  .telemetrie > .etiquette { display: none; }
+  .jauges { width: 210px; }
+  .jauge svg { max-width: 52px; }
+  .bloc { width: 230px; padding-top: 0; padding-left: 14px; border-top: 0; border-left: 1px solid var(--filet); gap: 5px; }
+  .mesures { gap: 2px; }
+  .mesures div { font-size: 14px; }
+  .raccourcis { display: none; }
+}
+/* ------------------------------------------------------------------ téléphone */
+@media (max-width: 760px) {
+  :root { --t-horloge: 32px; --t-corps: 16px; }
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(190px, 34%) minmax(0, 1fr) auto;
+    grid-template-areas: "tete" "tele" "scene" "journal" "commande";
+    gap: 10px; padding-block: 10px;
+  }
+  .devise, #puce-modele, .demo .long { display: none; }
+  .demo .court { display: inline; }
+  .sigle { font-size: 17px; letter-spacing: .36em; }
+  .tete { padding-bottom: 8px; gap: 8px; }
+  .puces { order: 3; }
+  .interrupteurs { order: 4; }
+  .puce, .bascule { padding: 4px 8px; letter-spacing: .12em; gap: 5px; }
+  .telemetrie { padding: 10px 12px; gap: 12px; }
+  .telemetrie .bloc { display: none; }
+  .telemetrie .bloc.cerveau { display: flex; width: auto; min-width: 120px; flex: 1 0 auto; gap: 5px; }
+  .telemetrie .bloc.cerveau .detail { display: none; }
+  .gros { font-size: 17px; }
+  .jauges { width: 200px; gap: 4px; }
+  .jauge svg { max-width: 40px; }
+  .jauge b { font-size: 14px; }
+  .jauge span { font-size: 9px; letter-spacing: .1em; }
+  .sous-titre { font-size: 17px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .etat-aide { font-size: 13px; }
+  .toasts { top: calc(10px + env(safe-area-inset-top, 0px)); }
+  .journal-tete { padding: 12px 14px 10px; }
+  .fil { padding: 12px 14px 14px; }
+  .envoyer { padding: 10px 12px; letter-spacing: .16em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="app" id="app">
+  <header class="tete">
+    <div class="marque">
+      <span class="sigle">J.A.R.V.I.S.</span>
+      <span class="devise">Just A Rather Very Intelligent System</span>
+    </div>
+    <ul class="puces">
+      <li class="puce local" id="puce-local"><i></i>100 % local</li>
+      <li class="puce" id="puce-modele">qwen3.5:9b</li>
+      <li class="puce demo" id="puce-demo" hidden><span class="long">Démonstration simulée</span><span class="court">Démo</span></li>
+    </ul>
+    <div class="interrupteurs">
+      <button type="button" class="bascule" id="btn-voix" aria-pressed="true"><i></i>Voix</button>
+      <button type="button" class="bascule" id="btn-confidentiel" aria-pressed="false"><i></i>Confidentiel</button>
+    </div>
+    <div class="horloge"><time id="heure">--:--</time><span id="date">—</span></div>
+  </header>
+
+  <aside class="panneau telemetrie" aria-label="Télémétrie">
+    <h2 class="etiquette">Télémétrie</h2>
+    <div class="jauges">
+      <figure class="jauge" id="jauge-cpu">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><circle class="piste" cx="32" cy="32" r="27"/><circle class="valeur" cx="32" cy="32" r="27"/></svg>
+        <figcaption><b data-v>—</b><span>Processeur</span></figcaption>
+      </figure>
+      <figure class="jauge" id="jauge-ram">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><circle class="piste" cx="32" cy="32" r="27"/><circle class="valeur" cx="32" cy="32" r="27"/></svg>
+        <figcaption><b data-v>—</b><span id="ram-legende">Mémoire</span></figcaption>
+      </figure>
+      <figure class="jauge" id="jauge-batterie">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><circle class="piste" cx="32" cy="32" r="27"/><circle class="valeur" cx="32" cy="32" r="27"/></svg>
+        <figcaption><b data-v>—</b><span id="batterie-legende">Batterie</span></figcaption>
+      </figure>
+    </div>
+    <section class="bloc cerveau">
+      <h3 class="etiquette">Cerveau</h3>
+      <p class="gros" id="modele">—</p>
+      <div class="barre"><span id="vram-barre"></span></div>
+      <p class="detail" id="vram">Aucun modèle chargé</p>
+    </section>
+    <section class="bloc">
+      <h3 class="etiquette">Dernière réponse</h3>
+      <dl class="mesures">
+        <div><dt>Transcription</dt><dd id="m-transcription">—</dd></div>
+        <div><dt>Premier mot</dt><dd id="m-premier">—</dd></div>
+        <div><dt>Première phrase dite</dt><dd id="m-phrase">—</dd></div>
+        <div><dt>Débit</dt><dd id="m-debit">—</dd></div>
+        <div><dt>Durée totale</dt><dd id="m-duree">—</dd></div>
+      </dl>
+    </section>
+    <section class="bloc">
+      <h3 class="etiquette">Confidentialité</h3>
+      <p class="gros"><span class="chiffres" id="compteur-reseau">0</span> <small id="compteur-legende">requête internet</small></p>
+      <p class="detail" id="domaines">Vos conversations ne quittent jamais la machine.</p>
+    </section>
+    <section class="bloc">
+      <h3 class="etiquette">Systèmes</h3>
+      <ul class="systemes" id="systemes"></ul>
+    </section>
+  </aside>
+
+  <main class="scene" id="scene" data-etat="demarrage" aria-label="Réacteur">
+    <canvas id="reacteur" aria-hidden="true"></canvas>
+    <div class="legende" aria-live="polite">
+      <p class="sous-titre" id="sous-titre"></p>
+      <span class="etat-nom" id="etat-nom">Initialisation</span>
+      <span class="etat-aide" id="etat-aide">Mise en route des systèmes</span>
+    </div>
+  </main>
+
+  <section class="panneau journal" aria-label="Journal de bord">
+    <div class="journal-tete">
+      <h2 class="etiquette">Journal de bord</h2>
+      <button type="button" class="lien" id="btn-effacer">Effacer</button>
+    </div>
+    <ol class="fil" id="fil" aria-live="polite"></ol>
+    <div class="vide" id="vide">
+      <p>Le journal est vide. Quelques idées pour commencer :</p>
+      <div class="suggestions">
+        <button type="button" class="suggestion">Quel temps fera-t-il cet après-midi ?</button>
+        <button type="button" class="suggestion">Lance un minuteur de 10 minutes</button>
+        <button type="button" class="suggestion">Qu'y a-t-il sur mon écran ?</button>
+        <button type="button" class="suggestion">Résume ce que j'ai copié</button>
+        <button type="button" class="suggestion">Comment va mon Mac ?</button>
+      </div>
+    </div>
+  </section>
+
+  <form class="commande" id="commande" autocomplete="off">
+    <button type="button" class="micro" id="btn-micro" aria-label="Parler à Jarvis" title="Parler à Jarvis (barre d'espace)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>
+    </button>
+    <label class="cache" for="saisie">Message pour Jarvis</label>
+    <textarea id="saisie" rows="1" maxlength="4000" placeholder="Écrivez à Jarvis…"></textarea>
+    <button type="submit" class="envoyer" id="btn-envoyer">Envoyer</button>
+    <p class="raccourcis">Entrée : envoyer · Maj + Entrée : nouvelle ligne · Espace : parler · Échap : interrompre</p>
+  </form>
+</div>
+
+<div class="demarrage" id="demarrage" role="status" aria-live="polite">
+  <div class="demarrage-cadre">
+    <p class="demarrage-sigle">J.A.R.V.I.S.</p>
+    <p class="demarrage-sous">Initialisation des systèmes…</p>
+    <ol class="demarrage-lignes" id="demarrage-lignes"></ol>
+  </div>
+</div>
+
+<div class="voile-modale" id="modale" hidden>
+  <div class="modale" role="alertdialog" aria-modal="true" aria-labelledby="modale-titre" aria-describedby="modale-raison">
+    <p class="etiquette">Autorisation requise</p>
+    <h2 id="modale-titre"><span id="modale-icone">❯</span><span id="modale-outil">—</span></h2>
+    <pre class="modale-args" id="modale-args"></pre>
+    <p class="modale-raison" id="modale-raison"></p>
+    <div class="compte"><span id="modale-barre"></span></div>
+    <div class="modale-actions">
+      <button type="button" class="refuser" id="btn-refuser">Refuser</button>
+      <button type="button" class="autoriser" id="btn-autoriser">Autoriser</button>
+    </div>
+    <p class="detail" id="modale-compte"></p>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<p class="bandeau" id="bandeau" hidden></p>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (s) => document.querySelector(s);
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+  const MODE = (document.querySelector('meta[name="jarvis-mode"]') || {}).content || "demo";
+  const params = new URLSearchParams(location.search);
+  const DEMO = MODE !== "local" || params.has("demo");
+  const reduit = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const etat = {
+    courant: "demarrage", resume: null, voix: true, confidentiel: false, motActivation: false,
+    reponse: null, cartes: new Map(), confirmation: null, reseau: 0, domaines: [], rejeu: false,
+  };
+
+  const ETATS = {
+    demarrage: ["Initialisation", "Mise en route des systèmes"],
+    inactif: ["En attente", "Écrivez votre demande ci-dessous"],
+    veille: ["En veille", "Dites « Hey Jarvis » ou appuyez sur la barre d'espace"],
+    ecoute: ["À l'écoute", "Je vous écoute"],
+    transcription: ["Transcription", "Je retranscris vos mots"],
+    reflexion: ["Réflexion", "Analyse de la demande"],
+    parole: ["Jarvis parle", "Échap pour l'interrompre"],
+    confirmation: ["Autorisation requise", "Votre accord est nécessaire"],
+  };
+
+  // ================================================================ outils de mise en forme
+  const ECHAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  const echapper = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ECHAP[c]);
+  const nombre = (x, d = 0) => Number(x).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const duree = (ms) => (ms == null ? "—" : ms < 1000 ? `${nombre(ms)} ms` : `${nombre(ms / 1000, 1)} s`);
+  const heureDe = (ts) => (ts ? new Date(ts * 1000) : new Date()).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+  function markdown(source) {
+    const blocs = [];
+    let t = String(source).replace(/```[\w-]*\n?([\s\S]*?)(?:```|$)/g, (_, code) => {
+      blocs.push(`<pre class="code"><code>${echapper(code.replace(/\n$/, ""))}</code></pre>`);
+      return `\n\u0000${blocs.length - 1}\u0000\n`;
+    });
+    t = echapper(t)
+      .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)\*(?!\w)/g, "$1<em>$2</em>")
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    let html = "", liste = null, para = [];
+    const fermerPara = () => { if (para.length) { html += `<p>${para.join("<br>")}</p>`; para = []; } };
+    const fermerListe = () => { if (liste) { html += `</${liste}>`; liste = null; } };
+    for (const ligne of t.split("\n")) {
+      const puce = ligne.match(/^\s*[-*•]\s+(.*)$/);
+      const num = ligne.match(/^\s*\d+[.)]\s+(.*)$/);
+      if (puce || num) {
+        fermerPara();
+        const type = puce ? "ul" : "ol";
+        if (liste !== type) { fermerListe(); html += `<${type}>`; liste = type; }
+        html += `<li>${(puce || num)[1]}</li>`;
+        continue;
+      }
+      fermerListe();
+      if (!ligne.trim()) { fermerPara(); continue; }
+      if (/^\u0000\d+\u0000$/.test(ligne.trim())) { fermerPara(); html += ligne.trim(); continue; }
+      const titre = ligne.match(/^#{1,4}\s+(.*)$/);
+      if (titre) { fermerPara(); html += `<p class="titre">${titre[1]}</p>`; continue; }
+      para.push(ligne);
+    }
+    fermerPara(); fermerListe();
+    return html.replace(/\u0000(\d+)\u0000/g, (_, i) => blocs[Number(i)]);
+  }
+
+  // ================================================================ horloge
+  function horloge() {
+    const d = new Date();
+    $("#heure").textContent = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    $("#date").textContent = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  }
+  horloge();
+  setInterval(horloge, 5000);
+
+  // ================================================================ réacteur
+  const Reacteur = (() => {
+    const toile = $("#reacteur");
+    const ctx = toile.getContext("2d");
+    const css = getComputedStyle(document.documentElement);
+    const C = {};
+    for (const nom of ["arc", "or", "alerte", "eclat", "texte"]) C[nom] = css.getPropertyValue(`--${nom}`).trim() || "#74dcff";
+    const N = 128;
+    const phases = Array.from({ length: N }, () => Math.random() * Math.PI * 2);
+    const vitesses = Array.from({ length: N }, () => 1.5 + Math.random() * 3.5);
+    const PROFILS = {
+      demarrage: [0.2, 0.15], inactif: [0.3, 0.2], veille: [0.38, 0.25], ecoute: [0.85, 0.5],
+      transcription: [0.65, 1.2], reflexion: [0.75, 1.6], parole: [0.9, 0.6], confirmation: [0.8, 0.4],
+    };
+    const legende = document.querySelector(".legende");
+    let L = 0, H = 0, hLegende = 0, dpr = 1, mode = "demarrage", energie = 0.15, niv = 0, cible = 0, source = "micro";
+    let a1 = 0, a2 = 0, a3 = 0, balayage = 0, flash = 0, dernier = performance.now();
+
+    const rgba = (hex, a) => {
+      const n = parseInt(hex.replace("#", ""), 16);
+      return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
+    };
+    function redimensionner() {
+      const r = toile.getBoundingClientRect();
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      L = r.width; H = r.height;
+      hLegende = legende ? legende.offsetHeight : 0;
+      toile.width = Math.max(1, Math.round(L * dpr));
+      toile.height = Math.max(1, Math.round(H * dpr));
+    }
+    const observateur = new ResizeObserver(redimensionner);
+    observateur.observe(toile);
+    if (legende) observateur.observe(legende);
+    redimensionner();
+
+    function anneau(cx, cy, r, style, w) {
+      ctx.strokeStyle = style; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    function image(maintenant) {
+      const dt = Math.min(0.05, (maintenant - dernier) / 1000);
+      dernier = maintenant;
+      const [pe, pv] = PROFILS[mode] || PROFILS.veille;
+      energie += (pe - energie) * Math.min(1, dt * 3);
+      niv += (cible - niv) * Math.min(1, dt * 14);
+      cible *= Math.pow(0.03, dt);
+      flash *= Math.pow(0.04, dt);
+      const v = reduit ? 0 : pv;
+      a1 += dt * 0.08 * v; a2 -= dt * 0.22 * v; a3 += dt * 0.5 * v; balayage += dt * 2.6;
+      const t = maintenant / 1000;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, L, H);
+      const dispo = Math.max(0, H - hLegende - 12);  // le réacteur ne passe jamais sous la légende
+      const cx = L / 2, cy = dispo / 2 + 6;
+      const R = Math.min(L * 0.44, dispo * 0.45);
+      if (R > 24) {
+        const respire = reduit ? 0 : (mode === "veille" || mode === "inactif") ? Math.sin(t * 1.3) * 0.06 : 0;
+        const coul = mode === "parole" ? C.or : mode === "confirmation" ? C.alerte : C.arc;
+        const e = Math.max(0, Math.min(1, energie + respire + niv * 0.25 + flash * 0.4));
+
+        let g = ctx.createRadialGradient(cx, cy, R * 0.1, cx, cy, R * 1.4);
+        g.addColorStop(0, rgba(coul, 0.22 * e)); g.addColorStop(0.5, rgba(coul, 0.05 * e)); g.addColorStop(1, rgba(coul, 0));
+        ctx.fillStyle = g; ctx.fillRect(0, 0, L, H);
+        ctx.lineCap = "round";
+
+        // couronne graduée et repères
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(a1);
+        for (let i = 0; i < 180; i++) {
+          const majeur = i % 15 === 0, ang = (i / 180) * Math.PI * 2;
+          const r1 = R * (majeur ? 0.952 : 0.975);
+          ctx.strokeStyle = rgba(coul, majeur ? 0.7 * e + 0.15 : 0.22 * e + 0.07);
+          ctx.lineWidth = majeur ? 1.6 : 1;
+          ctx.beginPath(); ctx.moveTo(Math.cos(ang) * r1, Math.sin(ang) * r1); ctx.lineTo(Math.cos(ang) * R, Math.sin(ang) * R); ctx.stroke();
+        }
+        ctx.restore();
+        // repères de cap : ils tournent avec la couronne mais restent lisibles
+        ctx.fillStyle = rgba(C.texte, 0.3 + 0.35 * e);
+        ctx.font = `${Math.max(9, R * 0.045)}px "Times New Roman", Times, serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        for (let k = 0; k < 4; k++) {
+          const ang = a1 + (k * Math.PI) / 2 - Math.PI / 2;
+          ctx.fillText(String(k * 90).padStart(3, "0"), cx + Math.cos(ang) * R * 1.075, cy + Math.sin(ang) * R * 1.075);
+        }
+
+        // arcs segmentés
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(a2);
+        ctx.lineWidth = Math.max(2, R * 0.018);
+        for (let s = 0; s < 6; s++) {
+          const debut = (s * Math.PI) / 3 + 0.12;
+          ctx.strokeStyle = rgba(s % 2 && mode === "reflexion" ? C.or : coul, 0.3 + 0.6 * e);
+          ctx.beginPath(); ctx.arc(0, 0, R * 0.88, debut, debut + Math.PI / 3 - 0.36); ctx.stroke();
+        }
+        ctx.restore();
+        anneau(cx, cy, R * 0.8, rgba(coul, 0.16 + 0.2 * e), 1);
+
+        // spectre audio
+        const amp = mode === "ecoute" || mode === "parole" ? niv : niv * 0.35;
+        const coulSpectre = source === "voix" ? C.or : coul;
+        ctx.save(); ctx.translate(cx, cy);
+        ctx.lineWidth = Math.max(1.2, R * 0.011);
+        for (let i = 0; i < N; i++) {
+          const ang = (i / N) * Math.PI * 2 + a3 * 0.2;
+          const onde = 0.5 + 0.5 * Math.sin(phases[i] + t * vitesses[i]);
+          const longueur = R * (0.02 + amp * 0.18 * (0.3 + 0.7 * onde) + (reduit ? 0 : 0.008 * Math.sin(t * 2 + i)));
+          const r1 = R * 0.66;
+          ctx.strokeStyle = rgba(coulSpectre, 0.22 + 0.6 * Math.min(1, amp * 1.5 + 0.2) * onde);
+          ctx.beginPath(); ctx.moveTo(Math.cos(ang) * r1, Math.sin(ang) * r1);
+          ctx.lineTo(Math.cos(ang) * (r1 + longueur), Math.sin(ang) * (r1 + longueur)); ctx.stroke();
+        }
+        ctx.restore();
+
+        // bobines du réacteur
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(-a1 * 2 + (mode === "reflexion" ? a3 : 0));
+        for (let k = 0; k < 10; k++) {
+          ctx.save(); ctx.rotate((k * Math.PI) / 5);
+          const r1 = R * 0.42, r2 = R * 0.56, l1 = R * 0.058, l2 = R * 0.088;
+          ctx.beginPath(); ctx.moveTo(-l1, -r1); ctx.lineTo(l1, -r1); ctx.lineTo(l2, -r2); ctx.lineTo(-l2, -r2); ctx.closePath();
+          const gb = ctx.createLinearGradient(0, -r1, 0, -r2);
+          gb.addColorStop(0, rgba(coul, 0.55 * e + 0.1)); gb.addColorStop(1, rgba(coul, 0.1 * e + 0.04));
+          ctx.fillStyle = gb; ctx.fill();
+          ctx.strokeStyle = rgba(coul, 0.45 * e + 0.15); ctx.lineWidth = 1; ctx.stroke();
+          ctx.restore();
+        }
+        ctx.restore();
+        anneau(cx, cy, R * 0.38, rgba(coul, 0.5 * e + 0.15), 1.5);
+        anneau(cx, cy, R * 0.33, rgba(coul, 0.22 * e + 0.08), 1);
+
+        // balayage pendant la transcription
+        if (mode === "transcription" && !reduit) {
+          ctx.save(); ctx.translate(cx, cy); ctx.rotate(balayage);
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R * 0.95, -0.55, 0); ctx.closePath();
+          ctx.fillStyle = rgba(coul, 0.13); ctx.fill();
+          ctx.restore();
+        }
+        // satellites pendant la réflexion
+        if ((mode === "reflexion" || mode === "transcription") && !reduit) {
+          [[0.62, 1.7], [0.78, -1.15], [0.93, 0.75]].forEach(([r, w], i) => {
+            const ang = t * w + i * 2.1;
+            ctx.fillStyle = rgba(i === 1 ? C.or : coul, 0.95);
+            ctx.shadowColor = i === 1 ? C.or : coul; ctx.shadowBlur = 12;
+            ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * R * r, cy + Math.sin(ang) * R * r, Math.max(2, R * 0.014), 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+          });
+        }
+        // cœur
+        const rc = R * (0.24 + 0.05 * e + 0.08 * niv + (reduit ? 0 : 0.012 * Math.sin(t * 3)));
+        g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rc);
+        g.addColorStop(0, rgba(C.eclat, 0.97)); g.addColorStop(0.25, rgba(C.eclat, 0.85));
+        g.addColorStop(0.55, rgba(coul, 0.5 + 0.35 * e)); g.addColorStop(1, rgba(coul, 0));
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, rc, 0, Math.PI * 2); ctx.fill();
+      }
+      requestAnimationFrame(image);
+    }
+    requestAnimationFrame(image);
+    return {
+      etat(m) { if (m === "ecoute" && mode !== "ecoute") flash = 1; mode = m; },
+      signal(src, v) { source = src; cible = Math.max(cible, Number(v) || 0); },
+      eclair() { flash = 1; },
+    };
+  })();
+
+  // ================================================================ état général
+  function changerEtat(nouveau) {
+    etat.courant = nouveau;
+    $("#scene").dataset.etat = nouveau;
+    const [nom, aide] = ETATS[nouveau] || [nouveau, ""];
+    $("#etat-nom").textContent = nom;
+    $("#etat-aide").textContent = nouveau === "veille" && !etat.motActivation
+      ? "Appuyez sur la barre d'espace ou le bouton micro pour parler" : aide;
+    $("#btn-micro").dataset.actif = nouveau === "ecoute" ? "1" : "0";
+    if (nouveau === "veille" || nouveau === "inactif") setTimeout(() => {
+      if (etat.courant === nouveau) $("#sous-titre").textContent = "";
+    }, 6000);
+    Reacteur.etat(nouveau);
+  }
+
+  // ================================================================ journal de bord
+  const fil = $("#fil");
+  const presDuBas = () => fil.scrollHeight - fil.scrollTop - fil.clientHeight < 120;
+  function defiler(force) { if (force || presDuBas()) fil.scrollTop = fil.scrollHeight; }
+  function majVide() { $("#vide").hidden = fil.children.length > 0; }
+
+  function entree(classe, html) {
+    const bas = presDuBas();
+    const li = document.createElement("li");
+    li.className = `entree ${classe}`;
+    li.innerHTML = html;
+    fil.append(li);
+    majVide();
+    defiler(bas || !etat.rejeu);
+    return li;
+  }
+  function entreeUtilisateur(evt) {
+    entree("vous", `<p class="qui">Vous<span>${heureDe(evt.t)}${evt.source === "voix" ? " · à voix haute" : ""}</span></p>`
+      + `<p class="texte">${echapper(evt.texte)}</p>`);
+    etat.reponse = null;
+  }
+  function blocJarvis(ts) {
+    if (!etat.reponse) {
+      const li = entree("jarvis", `<p class="qui">Jarvis<span>${heureDe(ts)}</span></p><ul class="outils"></ul><div class="texte"></div><p class="pied"></p>`);
+      etat.reponse = { el: li, texte: "", outils: li.querySelector(".outils"), corps: li.querySelector(".texte"), pied: li.querySelector(".pied") };
+    }
+    return etat.reponse;
+  }
+  let rafTexte = 0;
+  function ajouterJeton(evt) {
+    const r = blocJarvis(evt.t);
+    r.texte += evt.texte;
+    if (rafTexte) return;
+    rafTexte = requestAnimationFrame(() => {
+      rafTexte = 0;
+      if (etat.reponse === r) { r.corps.innerHTML = markdown(r.texte) + '<span class="curseur" aria-hidden="true"></span>'; defiler(); }
+    });
+  }
+  function finaliser(evt) {
+    if (rafTexte) { cancelAnimationFrame(rafTexte); rafTexte = 0; }
+    const r = blocJarvis(evt.t);
+    if (evt.texte) r.texte = evt.texte;
+    r.corps.innerHTML = markdown(r.texte);
+    if (evt.interrompu) r.el.classList.add("interrompue");
+    const s = evt.stats || {};
+    const pied = [];
+    if (s.premier_mot_ms != null) pied.push(`1er mot ${duree(s.premier_mot_ms)}`);
+    if (s.jetons_par_s) pied.push(`${nombre(s.jetons_par_s, 1)} jetons/s`);
+    if (s.outils) pied.push(`${s.outils} outil${s.outils > 1 ? "s" : ""}`);
+    if (evt.interrompu) pied.push("interrompu");
+    r.pied.textContent = pied.join(" · ");
+    if (!etat.rejeu) majMesures(s);
+    etat.reponse = null;
+    defiler();
+  }
+
+  const LIBELLES_PHASE = { refuse: "refusé", bloque: "bloqué par le pare-feu", erreur: "erreur" };
+  function carteOutil(evt) {
+    const r = blocJarvis(evt.t);
+    let carte = etat.cartes.get(evt.id);
+    if (!carte) {
+      carte = document.createElement("li");
+      carte.className = "outil";
+      carte.innerHTML = `<span class="outil-icone" aria-hidden="true"></span><div class="outil-corps">`
+        + `<p class="outil-tete"><span class="outil-nom"></span><span class="outil-statut"></span></p>`
+        + `<p class="outil-args"></p><details class="outil-resultat" hidden><summary>Résultat</summary><pre></pre></details></div>`;
+      r.outils.append(carte);
+      etat.cartes.set(evt.id, carte);
+    }
+    carte.dataset.risque = evt.risque || "lecture";
+    carte.dataset.phase = evt.phase;
+    carte.classList.toggle("reseau", !!evt.reseau);
+    carte.querySelector(".outil-icone").textContent = evt.icone || "◆";
+    carte.querySelector(".outil-nom").textContent = evt.libelle || evt.nom;
+    if (evt.args && Object.keys(evt.args).length) {
+      carte.querySelector(".outil-args").textContent = Object.entries(evt.args).map(([k, v]) => `${k} : ${v}`).join(" · ");
+    }
+    carte.querySelector(".outil-statut").textContent = evt.phase === "appel"
+      ? (evt.decision === "confirmer" ? "attend votre accord" : "en cours…")
+      : evt.phase === "resultat" ? (evt.ok ? `✓ ${duree(evt.duree_ms)}` : "✗ échec") : (LIBELLES_PHASE[evt.phase] || evt.phase);
+    if (evt.resultat) {
+      const d = carte.querySelector(".outil-resultat");
+      d.hidden = false;
+      d.querySelector("pre").textContent = evt.resultat;
+    }
+    defiler();
+  }
+
+  // ================================================================ télémétrie et systèmes
+  const CIRCONF = 2 * Math.PI * 27;
+  function jauge(sel, ratio, texte) {
+    const el = $(sel);
+    const c = el.querySelector(".valeur");
+    const r = Math.max(0, Math.min(1, ratio || 0));
+    c.style.strokeDasharray = `${CIRCONF}`;
+    c.style.strokeDashoffset = `${CIRCONF * (1 - r)}`;
+    el.querySelector("[data-v]").textContent = texte;
+    el.classList.toggle("haute", r > 0.85);
+  }
+  function majTelemetrie(e) {
+    jauge("#jauge-cpu", e.cpu / 100, `${e.cpu} %`);
+    jauge("#jauge-ram", e.ram_utilisee / e.ram_totale, `${nombre(e.ram_utilisee, 1)}`);
+    $("#ram-legende").textContent = `Go / ${nombre(e.ram_totale, 0)}`;
+    if (e.batterie != null) {
+      jauge("#jauge-batterie", e.batterie / 100, `${e.batterie} %`);
+      $("#batterie-legende").textContent = e.en_charge ? "En charge" : "Batterie";
+    } else {
+      jauge("#jauge-batterie", 1, "∞");
+      $("#batterie-legende").textContent = "Secteur";
+    }
+    const modeles = e.modeles || [];
+    const total = modeles.reduce((s, m) => s + (m.go || 0), 0);
+    $("#vram").textContent = modeles.length
+      ? modeles.map((m) => `${m.nom} · ${nombre(m.go, 1)} Go`).join("  ·  ") : "Aucun modèle chargé en mémoire";
+    $("#vram-barre").style.width = `${Math.min(100, (total / (e.ram_totale || 16)) * 100)}%`;
+    if (e.requetes_internet != null) majReseau(e.requetes_internet);
+  }
+  function majReseau(total, url) {
+    etat.reseau = total;
+    $("#compteur-reseau").textContent = nombre(total);
+    $("#compteur-legende").textContent = total > 1 ? "requêtes internet" : "requête internet";
+    if (url) {
+      try {
+        const hote = new URL(url.startsWith("http") ? url : `https://${url}`).hostname;
+        etat.domaines = [hote, ...etat.domaines.filter((d) => d !== hote)].slice(0, 3);
+        $("#domaines").textContent = `Dernières destinations : ${etat.domaines.join(", ")}. Aucune conversation envoyée.`;
+      } catch (_) { /* adresse illisible : on ignore */ }
+    }
+  }
+  function majMesures(s) {
+    $("#m-transcription").textContent = duree(s.transcription_ms);
+    $("#m-premier").textContent = duree(s.premier_mot_ms);
+    $("#m-phrase").textContent = duree(s.premiere_phrase_ms);
+    $("#m-debit").textContent = s.jetons_par_s ? `${nombre(s.jetons_par_s, 1)} jetons/s` : "—";
+    $("#m-duree").textContent = duree(s.duree_ms);
+  }
+  const SYSTEMES = [["cerveau", "Cerveau"], ["oreilles", "Oreilles"], ["voix", "Voix"], ["memoire", "Mémoire"],
+    ["documents", "Documents"], ["pare_feu", "Pare-feu éthique"]];
+  function majSystemes(c) {
+    const ul = $("#systemes");
+    ul.textContent = "";
+    for (const [cle, libelle] of SYSTEMES) {
+      const v = c && c[cle];
+      if (!v) continue;
+      const li = document.createElement("li");
+      li.className = v.desactive ? "off" : v.ok === true ? "ok" : v.ok === false ? "ko" : "attente";
+      li.title = v.detail || "";
+      li.innerHTML = `<i aria-hidden="true"></i><span>${libelle}</span><span class="sys-val">${echapper(v.nom || "")}</span>`;
+      ul.append(li);
+    }
+  }
+  function majReglages(r) {
+    if (typeof r.voix_active === "boolean") { etat.voix = r.voix_active; $("#btn-voix").setAttribute("aria-pressed", String(r.voix_active)); }
+    if (typeof r.confidentiel === "boolean") {
+      etat.confidentiel = r.confidentiel;
+      $("#btn-confidentiel").setAttribute("aria-pressed", String(r.confidentiel));
+      $("#puce-local").lastChild.textContent = r.confidentiel ? "Hors ligne" : "100 % local";
+    }
+  }
+
+  // ================================================================ notifications et bandeau
+  function toast(genre, titre, texte, ms = 6500) {
+    const el = document.createElement("div");
+    el.className = `toast ${genre}`;
+    el.innerHTML = `<p class="etiquette">${echapper(titre)}</p><p>${echapper(texte)}</p>`;
+    $("#toasts").append(el);
+    setTimeout(() => { el.classList.add("sortie"); setTimeout(() => el.remove(), 450); }, ms);
+  }
+  function bandeau(texte) {
+    const b = $("#bandeau");
+    b.textContent = texte || "";
+    b.hidden = !texte;
+  }
+
+  // ================================================================ autorisation
+  let minuterie = 0;
+  function ouvrirConfirmation(evt) {
+    etat.confirmation = evt.id;
+    $("#modale-icone").textContent = evt.icone || "◆";
+    $("#modale-outil").textContent = evt.libelle || evt.outil;
+    const args = Object.entries(evt.args || {});
+    $("#modale-args").textContent = args.length === 1 ? String(args[0][1]) : args.map(([k, v]) => `${k} : ${v}`).join("\n");
+    $("#modale-raison").textContent = evt.raison || "";
+    $("#modale").hidden = false;
+    $("#btn-refuser").focus();
+    const total = evt.delai || 45, fin = Date.now() + total * 1000;
+    clearInterval(minuterie);
+    const maj = () => {
+      const reste = Math.max(0, Math.ceil((fin - Date.now()) / 1000));
+      $("#modale-compte").textContent = `Sans réponse, refus automatique dans ${reste} s. Vous pouvez aussi répondre « oui » ou « non » à voix haute.`;
+      $("#modale-barre").style.transform = `scaleX(${reste / total})`;
+      if (reste <= 0) clearInterval(minuterie);
+    };
+    maj();
+    minuterie = setInterval(maj, 250);
+  }
+  function fermerConfirmation(id) {
+    if (id && etat.confirmation && etat.confirmation !== id) return;
+    etat.confirmation = null;
+    clearInterval(minuterie);
+    $("#modale").hidden = true;
+  }
+  function repondre(accord) {
+    const id = etat.confirmation;
+    if (!id) return;
+    envoyer({ type: "confirmation", id, accord });
+    fermerConfirmation(id);
+  }
+
+  // ================================================================ séquence de démarrage
+  async function demarrage(resume) {
+    const voile = $("#demarrage");
+    if (voile.dataset.fait) return;
+    voile.dataset.fait = "1";
+    const c = resume.composants || {};
+    const lignes = [["Cerveau", c.cerveau], ["Oreilles", c.oreilles], ["Voix", c.voix], ["Mémoire", c.memoire],
+      ["Documents", c.documents], ["Pare-feu éthique", c.pare_feu],
+      ["Réseau", { ok: true, nom: resume.confidentiel ? "coupé (mode confidentiel)" : "local · internet sur demande" }]];
+    const ol = $("#demarrage-lignes");
+    for (const [nom, v] of lignes) {
+      if (!v) continue;
+      const li = document.createElement("li");
+      const symbole = v.desactive ? "–" : v.ok === false ? "✗" : v.ok === true ? "✓" : "…";
+      const classe = v.desactive ? "off" : v.ok === false ? "ko" : "ok";
+      li.innerHTML = `<span>${nom}</span><span class="points"></span><span class="val">${echapper(v.nom || "")}</span>`
+        + `<span class="${classe}">${symbole}</span>`;
+      ol.append(li);
+      if (!voile.classList.contains("sortie")) await pause(reduit ? 0 : 180);
+    }
+    await pause(reduit ? 0 : 700);
+    voile.classList.add("sortie");
+    await pause(reduit ? 0 : 700);
+    voile.hidden = true;
+  }
+  $("#demarrage").addEventListener("click", () => {
+    const v = $("#demarrage");
+    v.classList.add("sortie");
+    setTimeout(() => { v.hidden = true; }, reduit ? 0 : 700);
+  });
+
+  // ================================================================ réception des événements
+  function recevoir(evt) {
+    switch (evt.type) {
+      case "bonjour": {
+        const r = evt.resume || {};
+        etat.resume = r;
+        etat.motActivation = !!r.mot_activation;
+        $("#modele").textContent = r.modele || "—";
+        $("#puce-modele").textContent = r.modele || "modèle";
+        majReglages(r);
+        majSystemes(r.composants || {});
+        if (r.stats) majMesures(r.stats);
+        fil.textContent = ""; etat.cartes.clear(); etat.reponse = null;
+        etat.rejeu = true;
+        for (const e of evt.historique || []) recevoir(e);
+        etat.rejeu = false;
+        majVide(); defiler(true);
+        changerEtat(r.etat === "demarrage" ? "inactif" : r.etat || "inactif");
+        demarrage(r);
+        break;
+      }
+      case "pret": if (evt.resume) { majSystemes(evt.resume.composants); etat.motActivation = !!evt.resume.mot_activation; } break;
+      case "composants":
+        majSystemes(evt.composants);
+        if (typeof evt.mot_activation === "boolean") { etat.motActivation = evt.mot_activation; changerEtat(etat.courant); }
+        break;
+      case "etat": changerEtat(evt.etat); break;
+      case "niveau": Reacteur.signal(evt.source, evt.valeur); break;
+      case "activation": Reacteur.eclair(); $("#sous-titre").textContent = "…"; break;
+      case "transcription": $("#sous-titre").textContent = evt.texte ? `« ${evt.texte} »` : "Je n'ai rien entendu."; break;
+      case "utilisateur": entreeUtilisateur(evt); if (evt.source !== "voix") $("#sous-titre").textContent = ""; break;
+      case "jeton": ajouterJeton(evt); break;
+      case "outil": carteOutil(evt); break;
+      case "reponse": finaliser(evt); break;
+      case "contexte":
+        if (!etat.rejeu && evt.souvenirs && evt.souvenirs.length) {
+          toast("souvenir", "Mémoire consultée", `${evt.souvenirs.length} souvenir${evt.souvenirs.length > 1 ? "s" : ""} utile${evt.souvenirs.length > 1 ? "s" : ""} : ${evt.souvenirs[0]}`, 4500);
+        }
+        break;
+      case "erreur":
+        entree("erreur", `<p class="qui">Incident<span>${heureDe(evt.t)}</span></p><p class="texte">${echapper(evt.texte)}</p>`);
+        etat.reponse = null;
+        break;
+      case "avertissement": if (!etat.rejeu) toast("alerte", "Attention", evt.texte, 9000); break;
+      case "info": if (!etat.rejeu) toast("info", "Jarvis", evt.texte); break;
+      case "confirmation": ouvrirConfirmation(evt); break;
+      case "confirmation_fin": fermerConfirmation(evt.id); break;
+      case "rappel": {
+        const titre = evt.genre === "minuteur" ? "Minuteur terminé" : "Rappel";
+        entree("rappel", `<p class="qui">${titre}<span>${heureDe(evt.t)}</span></p><p class="texte">${echapper(evt.texte)}</p>`);
+        etat.reponse = null;
+        if (!etat.rejeu) { toast("rappel", titre, evt.texte, 12000); Reacteur.eclair(); }
+        break;
+      }
+      case "souvenir": if (!etat.rejeu) toast("souvenir", evt.nouveau ? "Mémorisé" : "Souvenir mis à jour", evt.texte); break;
+      case "reseau": majReseau(evt.total, evt.url); break;
+      case "telemetrie": majTelemetrie(evt); break;
+      case "reglages": majReglages(evt); break;
+      case "interruption": if (etat.reponse) etat.reponse.el.classList.add("interrompue"); break;
+      case "conversation_effacee": fil.textContent = ""; etat.cartes.clear(); etat.reponse = null; majVide(); break;
+      default: break;
+    }
+  }
+
+  // ================================================================ connexion à Jarvis
+  let ws = null, tentatives = 0;
+  function connecter(jeton) {
+    const protocole = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${protocole}://${location.host}/ws?t=${encodeURIComponent(jeton)}`);
+    ws.onopen = () => { tentatives = 0; bandeau(""); };
+    ws.onmessage = (m) => { try { recevoir(JSON.parse(m.data)); } catch (e) { console.error(e); } };
+    ws.onclose = (e) => {
+      if (e.code === 1008) { bandeau("Lien expiré ou invalide : relancez Jarvis avec la commande « jarvis »."); return; }
+      bandeau("Connexion perdue avec Jarvis… nouvelle tentative");
+      setTimeout(() => connecter(jeton), Math.min(8000, 700 * 2 ** tentatives++));
+    };
+  }
+  function envoyer(obj) {
+    if (DEMO) { Demo.recevoir(obj); return; }
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+    else toast("alerte", "Hors ligne", "Jarvis n'est pas connecté pour le moment.");
+  }
+
+  // ================================================================ commandes de l'utilisateur
+  const saisie = $("#saisie");
+  const ajuster = () => { saisie.style.height = "auto"; saisie.style.height = `${Math.min(140, saisie.scrollHeight)}px`; };
+  saisie.addEventListener("input", ajuster);
+  saisie.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#commande").requestSubmit(); }
+  });
+  $("#commande").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const texte = saisie.value.trim();
+    if (!texte) return;
+    envoyer({ type: "question", texte });
+    saisie.value = "";
+    ajuster();
+  });
+  $("#btn-micro").addEventListener("click", () => envoyer({ type: "ecouter" }));
+  $("#btn-voix").addEventListener("click", () => envoyer({ type: "reglages", voix_active: !etat.voix }));
+  $("#btn-confidentiel").addEventListener("click", () => envoyer({ type: "reglages", confidentiel: !etat.confidentiel }));
+  $("#btn-effacer").addEventListener("click", () => envoyer({ type: "oublier_conversation" }));
+  $("#btn-refuser").addEventListener("click", () => repondre(false));
+  $("#btn-autoriser").addEventListener("click", () => repondre(true));
+  document.querySelectorAll(".suggestion").forEach((b) => b.addEventListener("click", () => envoyer({ type: "question", texte: b.textContent })));
+  const champ = (el) => el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.tagName === "BUTTON" || el.tagName === "SUMMARY" || el.isContentEditable);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { if (etat.confirmation) repondre(false); else envoyer({ type: "interrompre" }); return; }
+    if (e.code === "Space" && !e.repeat && !champ(e.target) && !etat.confirmation) { e.preventDefault(); envoyer({ type: "ecouter" }); }
+  });
+
+  // ================================================================ démonstration (sans Mac)
+  const Demo = (() => {
+    const R = (type, d = {}) => recevoir({ type, t: Date.now() / 1000, ...d });
+    let occupe = false, file = [], accord = null, reglages = { voix_active: true, confidentiel: false };
+    const RESUME = {
+      version: "1.0.0", nom: "Ichroc", appellation: "Monsieur", ville: "Angers", modele: "qwen3.5:9b", etat: "veille",
+      confidentiel: false, voix_active: true, mot_activation: true, stats: {},
+      composants: {
+        cerveau: { ok: true, nom: "qwen3.5:9b", detail: "Ollama 0.40.11 · tools · vision · thinking" },
+        oreilles: { ok: true, nom: "Whisper large-v3 turbo", detail: "« Hey Jarvis » actif" },
+        voix: { ok: true, nom: "Phonon · Augustin" },
+        memoire: { ok: true, nom: "14 souvenirs" },
+        documents: { ok: true, nom: "212 fichiers indexés" },
+        pare_feu: { ok: true, nom: "actif" },
+      },
+    };
+    let cpu = 12;
+    function telemetrie() {
+      cpu = Math.max(4, Math.min(60, cpu + (Math.random() - 0.5) * 9 + (occupe ? 6 : -2)));
+      R("telemetrie", {
+        cpu: Math.round(cpu), ram_utilisee: occupe ? 10.9 : 10.4, ram_totale: 16, batterie: 87, en_charge: false,
+        modeles: [{ nom: "qwen3.5:9b", go: 7.1 }, { nom: "qwen3-embedding:0.6b", go: 0.7 }, { nom: "phonon:fr", go: 0.14 }],
+      });
+    }
+    async function niveaux(source, ms, base = 0.55) {
+      const fin = performance.now() + ms;
+      while (performance.now() < fin) {
+        const x = performance.now() / 1000;
+        R("niveau", { source, valeur: Math.max(0, Math.min(1, base + 0.3 * Math.sin(x * 9) * Math.random() + 0.15 * Math.random())) });
+        await pause(70);
+      }
+      R("niveau", { source, valeur: 0 });
+    }
+    async function ecrire(texte, voix) {
+      let parle = false;
+      for (const mot of texte.split(/(?<=\s)/)) {
+        R("jeton", { texte: mot });
+        if (voix) {
+          if (!parle) { parle = true; R("etat", { etat: "parole" }); }
+          R("niveau", { source: "voix", valeur: 0.4 + Math.random() * 0.5 });
+        }
+        await pause(34 + Math.random() * 34);
+      }
+      if (voix) await niveaux("voix", 900, 0.5);
+    }
+    async function question(texte, voix) {
+      if (voix) {
+        R("activation"); R("etat", { etat: "ecoute" });
+        await niveaux("micro", 1900);
+        R("etat", { etat: "transcription" });
+        await pause(420);
+        R("transcription", { texte, ms: 380 + Math.round(Math.random() * 90) });
+      }
+      R("utilisateur", { texte, source: voix ? "voix" : "texte" });
+      R("etat", { etat: "reflexion" });
+      await pause(520);
+    }
+    async function outil(id, nom, libelle, icone, args, resultat, opts = {}) {
+      R("outil", { phase: "appel", id, nom, libelle, icone, args, risque: opts.risque || "lecture", reseau: !!opts.reseau, decision: opts.decision || "autoriser" });
+      if (opts.reseau) { for (const u of opts.urls || []) { R("reseau", { url: u, total: (etatDemoReseau += 1) }); await pause(120); } }
+      await pause(opts.delai || 600);
+      R("outil", { phase: "resultat", id, nom, libelle, icone, args, ok: true, duree_ms: opts.ms || 240, resultat, risque: opts.risque || "lecture", reseau: !!opts.reseau });
+    }
+    let etatDemoReseau = 0;
+    function fin(texte, stats) {
+      R("reponse", { texte, stats });
+      R("etat", { etat: "veille" });
+    }
+    const horaire = (min) => { const d = new Date(Date.now() + min * 60000); return `${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`; };
+
+    const SCENARIOS = [
+      async () => {
+        await question("Quel temps fera-t-il cet après-midi à Angers ?", true);
+        await outil("d1", "meteo", "météo", "☁", { ville: "Angers", jours: "1" },
+          "Angers, Pays de la Loire, France. Maintenant : 14 °C (ressenti 13 °C), partiellement nuageux, vent 16 km/h.\nProchaines heures : 15 h : 15 °C · 18 h : 13 °C, averses faibles, pluie 60 %.",
+          { reseau: true, urls: ["https://geocoding-api.open-meteo.com/v1/search", "https://api.open-meteo.com/v1/forecast"], ms: 612 });
+        await ecrire("Cet après-midi à Angers, comptez 14 à 16 °C sous un ciel partiellement nuageux. Une averse est probable vers 18 h : un parapluie serait prudent, Monsieur.", reglages.voix_active);
+        fin(null, { transcription_ms: 412, premier_mot_ms: 1310, premiere_phrase_ms: 1720, jetons_par_s: 23.6, duree_ms: 3920, outils: 1 });
+      },
+      async () => {
+        await question("Lance un minuteur de 30 secondes pour le thé.", false);
+        await outil("d2", "minuteur", "minuteur", "⧗", { minutes: "0.5", libelle: "thé" },
+          `Minuteur n°7 « thé » lancé pour 30 s.`, { risque: "action", ms: 9 });
+        await ecrire("C'est lancé : minuteur « thé » de 30 secondes. Je vous préviens dès qu'il est prêt.", false);
+        fin(null, { premier_mot_ms: 840, jetons_par_s: 24.1, duree_ms: 1610, outils: 1 });
+        setTimeout(() => R("rappel", { id: 7, texte: "thé", genre: "minuteur", en_retard: false }), 30000);
+      },
+      async () => {
+        await question("Quelle est mon adresse IP locale ?", true);
+        R("outil", { phase: "appel", id: "d3", nom: "executer_commande", libelle: "terminal", icone: "❯", args: { commande: "ipconfig getifaddr en0" }, risque: "sensible", decision: "confirmer" });
+        R("confirmation", { id: "d3", outil: "executer_commande", libelle: "terminal", icone: "❯", args: { commande: "ipconfig getifaddr en0" }, raison: "Action sensible : accord explicite requis avant exécution.", delai: 20 });
+        R("etat", { etat: "confirmation" });
+        accord = null;
+        const limite = Date.now() + 20000;
+        while (accord === null && Date.now() < limite) await pause(100);
+        const ok = accord === true;
+        R("confirmation_fin", { id: "d3", accord: ok });
+        R("etat", { etat: "reflexion" });
+        if (ok) {
+          await pause(300);
+          R("outil", { phase: "resultat", id: "d3", nom: "executer_commande", libelle: "terminal", icone: "❯", ok: true, duree_ms: 41, resultat: "Code de retour : 0\n192.168.1.42", risque: "sensible" });
+          await ecrire("Votre adresse IP locale est 192.168.1.42, sur l'interface Wi-Fi.", reglages.voix_active);
+          fin(null, { transcription_ms: 377, premier_mot_ms: 640, premiere_phrase_ms: 1020, jetons_par_s: 22.9, duree_ms: 2290, outils: 1 });
+        } else {
+          R("outil", { phase: "refuse", id: "d3", nom: "executer_commande", libelle: "terminal", icone: "❯", risque: "sensible", resultat: "L'utilisateur a refusé cette action." });
+          await ecrire("Entendu, je n'exécute rien. Vous trouverez aussi l'adresse dans Réglages Système, rubrique Wi-Fi.", reglages.voix_active);
+          fin(null, { transcription_ms: 377, premier_mot_ms: 610, jetons_par_s: 23.2, duree_ms: 1980, outils: 1 });
+        }
+      },
+      async () => {
+        await question("Souviens-toi que je bois mon café sans sucre.", true);
+        await outil("d4", "memoriser", "mémoriser", "◈", { fait: "Ichroc boit son café sans sucre." }, "Mémorisé (n°15) : Ichroc boit son café sans sucre.", { risque: "action", ms: 64 });
+        R("souvenir", { texte: "Ichroc boit son café sans sucre.", nouveau: true });
+        await ecrire("C'est noté, Monsieur : café sans sucre.", reglages.voix_active);
+        fin(null, { transcription_ms: 352, premier_mot_ms: 770, premiere_phrase_ms: 1090, jetons_par_s: 24.4, duree_ms: 1720, outils: 1 });
+      },
+      async () => {
+        await question("Que disent mes cours sur les Services Kubernetes ?", false);
+        await outil("d5", "chercher_documents", "documents", "⌕", { question: "Services Kubernetes" },
+          "[Cours Kubernetes – Chapitre 4.pdf · extrait 3 · pertinence 0,81]\nUn Service expose un ensemble de Pods derrière une adresse stable…",
+          { ms: 88 });
+        await ecrire("D'après **Cours Kubernetes – Chapitre 4.pdf**, un Service donne une adresse stable à un groupe de Pods, dont les adresses changent à chaque redémarrage :\n\n- **ClusterIP** : accessible seulement dans le cluster (par défaut) ;\n- **NodePort** : ouvre un port sur chaque nœud ;\n- **LoadBalancer** : demande une IP externe au fournisseur cloud.\n\nLe Service choisit ses Pods grâce à leurs *labels* (champ `selector`).", false);
+        fin(null, { premier_mot_ms: 910, jetons_par_s: 23.0, duree_ms: 5240, outils: 1 });
+      },
+    ];
+
+    async function traiterFile() {
+      while (file.length) {
+        const texte = file.shift();
+        occupe = true;
+        await question(texte, false);
+        await ecrire(`Ceci est une démonstration : aucune machine n'est reliée à cette page. Une fois Jarvis installé sur votre Mac, je répondrai vraiment à « ${texte} », entièrement en local.`, false);
+        fin(null, {});
+        occupe = false;
+      }
+    }
+
+    async function lancer() {
+      $("#puce-demo").hidden = false;
+      R("bonjour", { resume: RESUME, historique: [] });
+      telemetrie();
+      setInterval(telemetrie, 2000);
+      await pause(reduit ? 400 : 3400);
+      toast("info", "Démonstration", "Cette page rejoue un scénario : aucun micro n'est utilisé et rien n'est envoyé. Vous pouvez interagir.", 9000);
+      R("etat", { etat: "veille" });
+      await pause(1500);
+      for (const scenario of SCENARIOS) {
+        occupe = true;
+        await scenario();
+        occupe = false;
+        await traiterFile();
+        await pause(2200);
+      }
+    }
+
+    function recevoirClient(obj) {
+      if (obj.type === "question") { file.push(obj.texte); if (!occupe) traiterFile(); }
+      else if (obj.type === "confirmation") accord = !!obj.accord;
+      else if (obj.type === "reglages") {
+        if (typeof obj.voix_active === "boolean") reglages.voix_active = obj.voix_active;
+        if (typeof obj.confidentiel === "boolean") reglages.confidentiel = obj.confidentiel;
+        R("reglages", reglages);
+      }
+      else if (obj.type === "ecouter" && !occupe) {
+        (async () => {
+          occupe = true;
+          R("activation"); R("etat", { etat: "ecoute" });
+          await niveaux("micro", 1400, 0.25);
+          R("etat", { etat: "veille" });
+          toast("info", "Démonstration", "Le micro n'est pas utilisé sur cette page de démonstration.");
+          occupe = false;
+          traiterFile();
+        })();
+      }
+      else if (obj.type === "interrompre") R("interruption");
+      else if (obj.type === "oublier_conversation") R("conversation_effacee");
+    }
+    return { lancer, recevoir: recevoirClient };
+  })();
+
+  // ================================================================ lancement
+  if (DEMO) {
+    Demo.lancer();
+  } else {
+    let jeton = params.get("t");
+    try {
+      if (jeton) sessionStorage.setItem("jarvis-jeton", jeton);
+      else jeton = sessionStorage.getItem("jarvis-jeton");
+    } catch (_) { /* stockage indisponible : on garde le jeton en mémoire */ }
+    if (params.has("t")) history.replaceState(null, "", location.pathname);
+    if (jeton) connecter(jeton);
+    else {
+      $("#demarrage").hidden = true;
+      bandeau("Ouvrez le HUD avec la commande « jarvis » : le lien contient une clé de sécurité.");
+      changerEtat("inactif");
+    }
+  }
+})();
+</script>

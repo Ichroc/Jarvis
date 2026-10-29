@@ -1,0 +1,52 @@
+# Configuration de Jarvis
+# Copie ce fichier dans ~/.jarvis/config.toml (la commande « jarvis config --creer » le fait pour toi).
+# Tu ne gardes que ce que tu veux changer : tout le reste a une valeur par défaut.
+
+[general]
+nom = "Ichroc"              # ton prénom
+appellation = "Monsieur"     # comment Jarvis s'adresse à toi ("" pour rien)
+tutoiement = false           # true : Jarvis te tutoie
+ville = "Angers"             # ville par défaut pour la météo
+
+[cerveau]
+modele = "qwen3.5:9b"                       # 6,6 Go · outils, vision, réflexion
+modele_embeddings = "qwen3-embedding:0.6b"  # 0,6 Go · mémoire et recherche de documents
+reflexion = false            # true : raisonnement plus poussé en mode écrit (plus lent)
+temperature = 0.6
+contexte = 12288             # taille du contexte en jetons (plus grand = plus de mémoire vive)
+garder_charge = "30m"        # durée pendant laquelle le modèle reste chargé après usage
+prechauffage = true          # au lancement, prépare le modèle : la 1re réponse est aussi rapide que les suivantes
+
+[voix]
+active = true
+moteur = "auto"              # auto | ollama | say | ptts | espeak | aucun
+modele_tts = "phonon:fr"     # voix Phonon française (Ollama ≥ 0.40.11, Mac Apple Silicon)
+voix = "Augustin"            # voix masculines : Augustin, Arnaud, Jules, Baptiste, Lucien, Marius
+voix_say = "Thomas"          # repli : voix macOS (télécharge « Thomas (Améliorée) » pour mieux)
+lire_reponses_ecrites = false  # true : Jarvis lit aussi à voix haute les réponses aux questions tapées
+
+[oreilles]
+active = true
+moteur = "auto"              # auto | mlx-whisper | parakeet | faster-whisper
+modele_whisper = "mlx-community/whisper-large-v3-turbo"
+vocabulaire = ["ESEO", "Kubernetes", "Docker", "Wazuh", "TryHackMe"]  # aide à bien écrire tes mots
+mot_activation = true        # « Hey Jarvis »
+seuil_activation = 0.5       # plus haut = moins de faux déclenchements
+silence_fin_ms = 700         # silence qui marque la fin de ta phrase
+conversation_continue = true # après une réponse, Jarvis écoute 5 s sans « Hey Jarvis »
+micro = ""                   # "" = micro par défaut (voir « jarvis doctor »)
+
+[securite]
+mode_prudent = false         # true : toute action (pas seulement les sensibles) demande ton accord
+internet = true              # false : aucun outil réseau (météo, Wikipédia, recherche web)
+shell = true                 # commandes terminal, toujours avec ton accord
+journal = true               # journal d'audit dans ~/.jarvis/journal/audit.jsonl
+delai_confirmation_s = 45
+
+[interface]
+port = 7777
+ouvrir_navigateur = true
+lecteur_musique = "Music"    # ou "Spotify"
+
+[documents]
+dossiers = ["~/Documents"]   # dossiers indexés par « jarvis index »

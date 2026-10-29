@@ -1,0 +1,44 @@
+[project]
+name = "jarvis-local"
+version = "1.1.0"
+description = "J.A.R.V.I.S. : assistant personnel 100 % local pour Mac Apple Silicon (Ollama, Whisper, Phonon)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Ichroc FASSASSI" }]
+dependencies = [
+    "requests>=2.31",
+    "numpy>=1.26",
+    "psutil>=5.9",
+    "starlette>=0.40",
+    "uvicorn[standard]>=0.30",
+    "onnxruntime>=1.17",
+    "sounddevice>=0.4.6",
+    "pypdf>=4.0",
+    "python-docx>=1.1",
+    "ddgs>=9.0",
+    # Oreilles : MLX sur Mac Apple Silicon, processeur ailleurs
+    "mlx-whisper>=0.4.2 ; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "faster-whisper>=1.1 ; sys_platform != 'darwin' or platform_machine != 'arm64'",
+]
+
+[project.optional-dependencies]
+# Transcription encore plus rapide (25 langues européennes) : uv sync --extra parakeet
+parakeet = ["parakeet-mlx>=0.5 ; sys_platform == 'darwin' and platform_machine == 'arm64'"]
+# Voix Phonon sans Ollama (Linux) : uv sync --extra ptts (compte Hugging Face requis)
+ptts = ["ptts"]
+
+[dependency-groups]
+dev = ["pytest>=8", "httpx>=0.27", "reportlab>=4"]
+
+[project.scripts]
+jarvis = "jarvis.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["jarvis"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
