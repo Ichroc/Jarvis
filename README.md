@@ -228,6 +228,6 @@ uv run pytest        # 138 tests, environ 25 secondes, sans micro ni modèle ré
 
 Les tests utilisent un faux serveur Ollama qui parle exactement le même protocole (flux NDJSON, appels d'outils, audio PCM). Le détecteur « Hey Jarvis » est vérifié sur un vrai enregistrement, et sa réimplémentation donne des scores identiques à ceux d'openWakeWord.
 
-## Licences des modèles
+## Licences
 
-Ton code peut prendre la licence de ton choix. Les modèles ont les leurs : Qwen3.5 et Qwen3-Embedding (Apache 2.0), Whisper (MIT), Silero VAD (MIT), openWakeWord (code Apache 2.0, modèle « hey jarvis » CC BY-NC-SA 4.0), **Phonon 40M français (CC BY-NC 4.0)**. Les deux licences « NC » autorisent un usage personnel, pas commercial. Détails : [THIRD_PARTY.md](THIRD_PARTY.md).
+Le code de Jarvis est sous licence MIT (voir [LICENSE](LICENSE)). Les modèles ont leurs propres licences : Qwen3.5 et Qwen3-Embedding (Apache 2.0), Whisper (MIT), Silero VAD (MIT), openWakeWord (code Apache 2.0, modèle « hey jarvis » CC BY-NC-SA 4.0), **Phonon 40M français (CC BY-NC 4.0)**. Les deux licences « NC » autorisent un usage personnel, pas commercial. Détails : [THIRD_PARTY.md](THIRD_PARTY.md).
