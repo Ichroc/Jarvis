@@ -1,5 +1,7 @@
 # J.A.R.V.I.S.
 
+[![Tests](https://github.com/Ichroc/Jarvis/actions/workflows/tests.yml/badge.svg)](https://github.com/Ichroc/Jarvis/actions/workflows/tests.yml)
+
 **Just A Rather Very Intelligent System** : ton assistant personnel, qui t'écoute, te répond à voix haute, agit sur ton Mac et se souvient de toi. Tout tourne en local, sur un Mac Apple Silicon comme sur un PC Linux : aucune conversation ne quitte ta machine.
 
 ![Le HUD de Jarvis](docs/hud.png)
@@ -223,8 +225,10 @@ jarvis/
 ## Tests
 
 ```bash
-uv run pytest        # 138 tests, environ 25 secondes, sans micro ni modèle réel
+uv run pytest        # 143 tests, environ 30 secondes, sans micro ni modèle réel
 ```
+
+Les mêmes tests tournent automatiquement sur GitHub à chaque modification ([GitHub Actions](.github/workflows/tests.yml)) : c'est ce qu'indique le badge en haut de cette page.
 
 Les tests utilisent un faux serveur Ollama qui parle exactement le même protocole (flux NDJSON, appels d'outils, audio PCM). Le détecteur « Hey Jarvis » est vérifié sur un vrai enregistrement, et sa réimplémentation donne des scores identiques à ceux d'openWakeWord.
 
