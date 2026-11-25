@@ -203,7 +203,7 @@ jarvis/
 │   ├── hud/                      serveur local sécurisé + interface
 │   ├── doctor.py · bench.py      diagnostic et mesures
 │   └── assets/                   modèles ONNX embarqués, configuration exemple
-├── tests/                        138 tests, dont un faux serveur Ollama
+├── tests/                        143 tests, dont un faux serveur Ollama
 └── docs/                         guide, machines, sécurité, captures
 ```
 
