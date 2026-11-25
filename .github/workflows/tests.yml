@@ -1,0 +1,31 @@
+name: Tests
+
+# Lance les 138 tests à chaque modification, sans micro ni modèle réel :
+# un faux serveur Ollama remplace le vrai (voir tests/faux_ollama.py).
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bibliothèque audio (PortAudio, requise par sounddevice)
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Installer Python 3.12 et les dépendances
+        run: uv sync --python 3.12
+
+      - name: Lancer les tests
+        run: uv run pytest -q
